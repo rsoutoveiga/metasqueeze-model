@@ -1,0 +1,5 @@
+id shape name left left_middle right_middle right
+1 trapezoid 0 200 250 412.8 458.3
+2 triangle 1 412.8 458.3 458.3 492.7
+3 triangle 2 458.3 492.7 492.7 518.3
+4 trapezoid 3 492.7 518.3 800 900

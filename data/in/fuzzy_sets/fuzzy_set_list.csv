@@ -1,0 +1,4 @@
+id file_name level mf variable
+1 fuzzy_set_01.csv 0 0 2
+2 fuzzy_set_02_low.csv 1 0 1
+3 fuzzy_set_03_high.csv 1 1 1

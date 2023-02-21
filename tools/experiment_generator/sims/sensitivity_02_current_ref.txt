@@ -1,0 +1,23 @@
+#sensitivity_02_current_ref#
+$0$
+@"is_study_rep", (1)@
+@"study_rep", (study_rep_30.csv)@
+@"sim_rep", (30)@
+@"run_time", (500)@
+@"is_study", (0)@
+@"is_fire_output", (0)@
+@"is_dynamics", (0)@
+@"is_metapop", (1)@
+@"is_metapop_full", (0)@
+@"is_metapop_dynamics", (0)@
+@"is_metapop_pops", (0)@
+@"is_recol_rescue", (0)@
+@"is_plants_pop", (0)@
+@"scenario_file", (scn_current.csv)@
+<carrying_capacity init_cones init_seeds long_term_rain>
+<fire_size_x fire_size_y fire_interval_mean burned_lower_cut burned_upper_cut>
+<wind_prop wind_a wind_b birds_dist_max birds_prop follicles_distr_a follicles_distr_b postfire_follicles_open>
+<young adult recruit_post_min recruit_post_max recruit_post_mean recruit_weather senescence_age senescence_increase>
+<mort_min mort_a mort_b mort_c mort_d mort_e mort_f cone_cycle seed_longevity>
+<flower_age_a flower_age_b flower_age_c flower_weather_a flower_weather_b flower_weather_c flower_weather_d flower_weather_e>
+<pollination follicles seeds firm_seeds viable_seeds insect_a insect_b decay_a decay_b open_a open_b open_c>

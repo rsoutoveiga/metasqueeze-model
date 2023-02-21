@@ -1,0 +1,16 @@
+#03_cali_mort_2#
+@"is_study_rep", (1)@
+@"study_rep", (study_rep_30.csv)@
+@"sim_rep", (50)@
+@"run_time", (8)@
+@"is_study", (0)@
+@"is_fire_output", (0)@
+@"is_dynamics", (0)@
+@"is_metapop", (0)@
+@"is_metapop_full", (0)@
+@"is_metapop_dynamics", (0)@
+@"is_metapop_pops", (1)@
+@"is_recol_rescue", (0)@
+@"is_plants_pop", (0)@
+@"scenario_file", (scn_cali_03_mort_2.csv)@
+<"birds_a", "birds_prop", "wind_prop", (1 2 3), [0 0.2 0.01], [0 0.2 0.01]>

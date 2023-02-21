@@ -1,0 +1,25 @@
+#01_01_experiment#
+@"is_study_rep", (1)@
+@"study_rep", (study_rep_30.csv)@
+@"sim_rep", (30)@
+@"run_time", (500)@
+@"is_study", (0)@
+@"is_fire_output", (0)@
+@"is_dynamics", (0)@
+@"is_metapop", (1)@
+@"is_metapop_full", (0)@
+@"is_metapop_dynamics", (0)@
+@"is_metapop_pops", (0)@
+@"is_recol_rescue", (0)@
+@"is_plants_pop", (0)@
+@"is_plants_pop", (0)@
+@"scenario_file", (scn_baseline.csv)@
+{"pollination", (90)}
+{"follicles", (9.97)}
+<"fire_interval_mean", "fire_size_x", "fire_size_y", [5 35 1], (530.33), (883.8835)>
+<"fire_interval_mean", "fire_size_x", "fire_size_y", [5 35 1], (1060.66), (1767.767)>
+<"fire_interval_mean", "fire_size_x", "fire_size_y", [5 35 1], (1590.99), (2651.6505)>
+<"fire_interval_mean", "fire_size_x", "fire_size_y", [5 35 1], (2121.32), (3535.534)>
+<"fire_interval_mean", "fire_size_x", "fire_size_y", [5 35 1], (2651.65), (4419.418)>
+<"fire_interval_mean", "fire_size_x", "fire_size_y", [5 35 1], (3181.98), (5303.301)>
+<"fire_interval_mean", "fire_size_x", "fire_size_y", [5 35 1], (3712.31), (6187.185)>

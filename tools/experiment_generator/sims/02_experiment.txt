@@ -1,0 +1,17 @@
+#02_experiment#
+@"is_study_rep", (1)@
+@"study_rep", (study_rep_30.csv)@
+@"sim_rep", (30)@
+@"run_time", (500)@
+@"is_study", (0)@
+@"is_fire_output", (0)@
+@"is_dynamics", (0)@
+@"is_metapop", (1)@
+@"is_metapop_full", (0)@
+@"is_metapop_dynamics", (0)@
+@"is_metapop_pops", (0)@
+@"is_recol_rescue", (0)@
+@"is_plants_pop", (0)@
+@"is_plants_pop", (0)@
+@"scenario_file", (scn_current.csv)@
+<"fire_interval_mean", "mort_scn", [5 35 1], (2 5)>

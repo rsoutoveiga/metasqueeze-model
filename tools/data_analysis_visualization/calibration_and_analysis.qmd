@@ -1,0 +1,4668 @@
+---
+title: "Data anaylsis, calibration and sensitivity"
+author: "Rodrigo Souto-Veiga"
+format: 
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    title: "Data anaylsis, calibration and sensitivity"
+execute: 
+  warning: false
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+In this document are the new data analysis, calibration, and sensitivity
+analysis for the model MetaSqueeze used in the following article:
+
+**Souto-Veiga, R., Groeneveld, J., Enright, N. J., Fontaine, J. B., &
+Jeltsch, F. (20XX). Climate change may shift metapopulations towards
+unstable source-sink dynamics in a fire-killed, serotinous shrub**
+
+Corresponding author:
+
+Rodrigo Souto-Veiga^1, 2^
+
+[rsoutoveiga\@uni-potsdam.de](rsoutoveiga@uni-potsdam.de)
+
+ORCID: [0000-0001-8639-620X](https://orcid.org/0000-0001-8639-620X)
+
+^1^ Plant Ecology and Nature Conservation, University of Potsdam, Am
+Mühlenberg 3, 14476, Potsdam, Germany
+
+^2^ Environmental and Conservation Sciences, Murdoch University, Murdoch
+6150, WA, Australia
+
+
+# 1. Initial cones and seeds
+
+Calibration of initial cones per plant and viable seeds per cone. We
+assumed that the plants are between 20 and 30 years old. Thus, we
+calculate the average number of cones and average viable seeds per plant
+between 20 and 30 years from 1000 replicates.
+
+Mean number of cones per plant of 20 to 30 years after the fire mean =
+85.868, SD = 4.309
+
+Mean number of viable seeds per plant of 20 to 30 year after the fire
+mean = 623.141, and SD = 22.060
+
+```{r}
+#| label: cali-1
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+#| eval: false
+
+# load necessary packages
+library(dplyr)
+
+# relative path
+g_file_path <- "data/sim_outputs/calibration/01_cali_init_cones_seeds/raw/"
+g_file_name <- "01_cali_init_cones_seeds_sim_1_seed_dynamics.csv"
+
+g_file_name <- base::paste0(g_file_path, g_file_name)
+
+g_df <- utils::read.csv(g_file_name, sep = ',')
+
+g_df_summ <- g_df %>% 
+  dplyr::group_by(year) %>% 
+  dplyr::summarise(
+    mean_cones = base::mean(cones_plant),
+    sd_cones   = stats::sd(cones_plant),
+    mean_seeds = base::mean(seeds_plant),
+    sd_seeds   = stats::sd(seeds_plant)
+  )
+
+# Mean number of cones per plant of 20 to 30 years after the fire
+# mean = 85.868, SD = 4.309
+base::print("number of cones per plant: mean and SD")
+base::mean(g_df_summ$mean_cones[g_df_summ$year >= 20 & g_df_summ$year <= 30])
+stats::sd(g_df_summ$mean_cones[g_df_summ$year >= 20 & g_df_summ$year <= 30])
+
+# Mean number of viable seeds per plant of 20 to 30 year after the fire
+# mean = 623.141, and SD = 22.060
+base::print("number of viable seeds per plant: mean and SD")
+base::mean(g_df_summ$mean_seeds[g_df_summ$year >= 20 & g_df_summ$year <= 30])
+stats::sd(g_df_summ$mean_seeds[g_df_summ$year >= 20 & g_df_summ$year <= 30])
+
+```
+
+# 2. Prefire population size
+
+## 2.1 Mortality scenarios
+
+```{r}
+#| label: mort-scn
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+#| eval: false
+
+# load libraries
+library(ggplot2)
+
+g_file_path <- "data/papers/"
+g_file_name <- "Keith2014_mort_rates.csv"
+
+g_df <- read.csv(
+  file = base::paste0(g_file_path, g_file_name), header = TRUE, sep = ','
+)
+
+# split spring and autumn data in two df
+g_df_spring <- g_df[, c(1, 2, 3, 6)]
+g_df_autumn <- g_df[, c(1, 2, 4, 6)]
+
+# change moratlity rate column name
+base::colnames(g_df_spring) <- c("year", "age", "mort", "lagrain")
+base::colnames(g_df_autumn) <- c("year", "age", "mort", "lagrain")
+
+# add column "season"
+g_df_spring$season <- "spring"
+g_df_autumn$season <- "autumn"
+
+# fit morality rates from spring and autumn separately
+g_lm_spring <- stats::lm(mort ~ I(1/age) + lagrain, data = g_df_spring)
+g_lm_autumn <- stats::lm(mort ~ I(1/age) + lagrain, data = g_df_autumn)
+
+# calculate predicted mortality rate based on plant age with mean lagrain
+g_df_spring$y <- stats::coef(g_lm_spring)[1] +
+  stats::coef(g_lm_spring)[2] * 1/g_df_spring$age +
+  stats::coef(g_lm_spring)[3] * base::mean(g_df_spring$lagrain)
+
+g_df_autumn$y <- stats::coef(g_lm_autumn)[1] +
+  stats::coef(g_lm_autumn)[2] * 1/g_df_autumn$age +
+  stats::coef(g_lm_autumn)[3] * base::mean(g_df_autumn$lagrain)
+
+# combine df
+g_df <- base::rbind(g_df_spring, g_df_autumn)
+
+pmort <- ggplot(g_df) +
+  geom_point(aes(x = age, y = mort, color = season), alpha = 0.5, size = 3) +
+  geom_line(aes(x = age, y = y, color = season), size = 1.5) +
+  theme_classic() +
+  scale_color_manual(
+    name = "Site",
+    # values = c("#56B4E9", "#E69F00"),
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("autumn", "spring")
+  ) +
+  labs(x = "Plant age (years)", y = "Mortality rate") +
+  ggplot2::scale_x_continuous(
+    breaks = base::seq(from = 1, to = 15, by = 2)
+  ) +
+  theme(
+    text = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14, face = "plain"),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.position = c(0.8, 0.7)
+  )
+
+pmort
+
+# save plot (uncomment code to save image)
+ggplot2::ggsave(
+  plot = pmort,
+  filename = base::paste0("mort_fit_spring_autumn.png"),
+  path = "./data/plots",
+  width = 3.31 * 2,
+  height = 4,
+  bg = "white",
+  dpi = 1200
+)
+
+```
+
+```{r}
+#| label: mort-plots
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+#| eval: false
+
+# load libraries
+library(ggplot2)
+library(dplyr)
+library(signs)
+library(ggpubr)
+
+# parameters used in the simulation experiments
+g_plant_age_senescence <- 25
+g_senescence_increase <- 0.01
+g_long_term_rainfall <- 454
+g_recruit_weather <- 0.06
+g_recruit_mean <- 0.923
+g_recruit_min <- 0.911
+g_mort_min <- 0.02
+g_mort_max <- 0.987
+
+# Here I plot Enright et al. (1996) flower production and my new adjusted curve
+g_df_mort_relative <- base::data.frame(age = base::seq(0, 40, 1))
+g_df_mort_avg <- base::data.frame(age = base::seq(0, 40, 1))
+g_df_mort_min <- base::data.frame(age = base::seq(0, 40, 1))
+
+# functions
+fun_mort_relative_age <- function(age) {
+  base::ifelse(
+    age == 0, 
+    g_recruit_mean, 
+    base::ifelse(
+      age > 0 & age < 15, 
+      0.0553 + (0.2645 / age) + (0.179 / age^2),
+      base::ifelse(
+        age >= 15 & age <= 25,
+        0.0553 + (0.2645 / 15) + (0.179 / 15^2),
+        (0.0553 + (0.2645 / 15) + (0.179 / 15^2)) + 
+          (g_senescence_increase * (age - g_plant_age_senescence))
+      )
+    )
+  )
+}
+
+fun_mort_spring <- function(age, rainfall) {
+  (0.2877622 / age) + (-0.0005888 * rainfall) + 0.3179949
+}
+
+fun_mort_autumn <- function(age, rainfall) {
+  (0.6475991 / age) + (-0.0006502 * rainfall) + 0.2867799
+}
+
+fun_mort_relative_weather <- function(age, rainfall) {
+  base::ifelse(
+    age == 0,
+    1 + (g_long_term_rainfall - rainfall) / 100 * g_recruit_weather, 
+    1 + (-0.00061 * rainfall + 0.26873))
+}
+
+fun_mort_average <- function(age, rainfall) {
+  base::ifelse(
+    age == 0, 
+    g_recruit_mean + ((g_long_term_rainfall - rainfall) / 100 * g_recruit_weather), 
+    base::ifelse(
+      age > 0 & age <= 15, 
+      (fun_mort_spring(age, rainfall) + fun_mort_autumn(age, rainfall)) / 2,
+      base::ifelse(
+        age > 15 & age <= 25,
+        (fun_mort_spring(15, rainfall) + fun_mort_autumn(15, rainfall)) / 2,
+        (fun_mort_spring(15, rainfall) + fun_mort_autumn(15, rainfall)) / 2 + 
+        (g_senescence_increase * (age - g_plant_age_senescence))
+      )
+    )
+  )
+}
+
+fun_mort_min <- function(age, rainfall) {
+  base::ifelse(
+    age == 0, 
+    g_recruit_min + ((g_long_term_rainfall - rainfall) / 100 * g_recruit_weather), 
+    base::ifelse(
+      age > 0 & age <= 15, 
+      base::min(fun_mort_spring(age, rainfall), fun_mort_autumn(age, rainfall)),
+      base::ifelse(
+        age > 15 & age <= 25,
+        base::min(fun_mort_spring(15, rainfall), fun_mort_autumn(15, rainfall)),
+        base::min(fun_mort_spring(15, rainfall), fun_mort_autumn(15, rainfall)) + 
+          (g_senescence_increase * (age - g_plant_age_senescence))
+      )
+    )
+  )
+}
+
+fun_truncate_mortality <- function(age, mort) {
+  base::ifelse(
+    mort > g_mort_max, 
+    g_mort_max, 
+    base::ifelse(
+      age == 0 & mort < g_recruit_min,
+      g_recruit_min,
+      base::ifelse(
+        mort < g_mort_min,
+        g_mort_min,
+        mort
+      )
+    )
+  )
+}
+
+# scenario name
+g_df_mort_relative$scn <- "relative"
+g_df_mort_avg$scn <- "average"
+g_df_mort_min$scn <- "min"
+
+# calculate moratlity rates values for mort relative function
+g_df_mort_relative_long <- g_df_mort_relative
+
+g_df_mort_relative_long <- g_df_mort_relative_long %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_relative_age(age))
+
+g_df_mort_relative_long <- g_df_mort_relative_long %>% 
+  group_by(age, scn) %>%
+  mutate(mort = mort * fun_mort_relative_weather(age, 454))
+
+g_df_mort_relative_long$rain <- "454"
+
+# +100 mm
+g_df_mort_relative_plus100 <- g_df_mort_relative
+g_df_mort_relative_plus100 <- g_df_mort_relative_plus100 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_relative_age(age))
+
+g_df_mort_relative_plus100 <- g_df_mort_relative_plus100 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = mort * fun_mort_relative_weather(age, 554))
+
+g_df_mort_relative_plus100$rain <- "554"
+
+# +200 mm
+g_df_mort_relative_plus200 <- g_df_mort_relative
+g_df_mort_relative_plus200 <- g_df_mort_relative_plus200 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_relative_age(age))
+
+g_df_mort_relative_plus200 <- g_df_mort_relative_plus200 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = mort * fun_mort_relative_weather(age, 654))
+
+g_df_mort_relative_plus200$rain <- "654"
+
+# -100 mm
+g_df_mort_relative_minus100 <- g_df_mort_relative
+g_df_mort_relative_minus100 <- g_df_mort_relative_minus100 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_relative_age(age))
+
+g_df_mort_relative_minus100 <- g_df_mort_relative_minus100 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = mort * fun_mort_relative_weather(age, 354))
+
+g_df_mort_relative_minus100$rain <- "354"
+
+# -200 mm
+g_df_mort_relative_minus200 <- g_df_mort_relative
+g_df_mort_relative_minus200 <- g_df_mort_relative_minus200 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_relative_age(age))
+
+g_df_mort_relative_minus200 <- g_df_mort_relative_minus200 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = mort * fun_mort_relative_weather(age, 254))
+
+g_df_mort_relative_minus200$rain <- "254"
+
+
+g_df_mort_relative_all <- base::rbind(
+  g_df_mort_relative_plus200,
+  g_df_mort_relative_plus100,
+  g_df_mort_relative_long,
+  g_df_mort_relative_minus100,
+  g_df_mort_relative_minus200
+)
+
+# truncate mortality probability
+g_df_mort_relative_all <- g_df_mort_relative_all %>% 
+  mutate(
+    mort = fun_truncate_mortality(age, mort)
+  )
+
+g_df_mort_relative_all$rain
+
+g_df_mort_relative_all$rain <- base::as.factor(g_df_mort_relative_all$rain)
+g_df_mort_relative_all$rain <- base::ordered(g_df_mort_relative_all$rain)
+
+p1 <- ggplot(data = g_df_mort_relative_all,
+       aes(x = age,
+           y = mort,
+           color = rain)) +
+  geom_line(size = 1.2,
+            alpha = 0.7) +
+  scale_color_manual(
+    name = "Rainfall scenario",
+    values = c("#D55E00", "#E69F00", "black", "#56B4E9", "#0072B2"),
+    labels = c(
+      "\u2013200 mm below average",
+      "\u2013100 mm below average",
+      "long-term average [454 mm]",
+      "+100 mm above average",
+      "+200 mm above average"
+    )
+  ) +
+  theme_classic() +
+  xlab("Plant age (years)") +
+  ylab("Mortality") +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_mort_max,
+      linetype = "max plant mortality"),
+    color = "black"
+  ) +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_recruit_min,
+      linetype = "min recruit mortality"),
+    color = "black"
+  ) +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_mort_min,
+      linetype = "min plant mortality"),
+    color = "black"
+  ) +
+  theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  ) +
+  ggplot2::scale_linetype_manual(
+    name = "",
+    breaks = c(
+      "max plant mortality", 
+      "min recruit mortality", 
+      "min plant mortality"),
+    values = c(2, 3, 4)
+  ) +
+  ggplot2::ggtitle("(a)")
+
+
+#############################################
+g_df_mort_avg_long <- g_df_mort_avg
+
+g_df_mort_avg_long <- g_df_mort_avg_long %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_average(age, 454))
+
+g_df_mort_avg_long$rain <- "454"
+
+# +100 mm
+g_df_mort_avg_plus100 <- g_df_mort_avg
+g_df_mort_avg_plus100 <- g_df_mort_avg_plus100 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_average(age, 554))
+
+g_df_mort_avg_plus100$rain <- "554"
+
+# +200 mm
+g_df_mort_avg_plus200 <- g_df_mort_avg
+g_df_mort_avg_plus200 <- g_df_mort_avg_plus200 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_average(age, 654))
+
+g_df_mort_avg_plus200$rain <- "654"
+
+# -100 mm
+g_df_mort_avg_minus100 <- g_df_mort_avg
+g_df_mort_avg_minus100 <- g_df_mort_avg_minus100 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_average(age, 354))
+
+g_df_mort_avg_minus100$rain <- "354"
+
+# -200 mm
+g_df_mort_avg_minus200 <- g_df_mort_avg
+g_df_mort_avg_minus200 <- g_df_mort_avg_minus200 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_average(age, 254))
+
+g_df_mort_avg_minus200$rain <- "254"
+
+g_df_mort_avg_all <- base::rbind(
+  g_df_mort_avg_plus200,
+  g_df_mort_avg_plus100,
+  g_df_mort_avg_long,
+  g_df_mort_avg_minus100,
+  g_df_mort_avg_minus200
+)
+
+# truncate mortality probability
+g_df_mort_avg_all <- g_df_mort_avg_all %>% 
+  mutate(
+    mort = fun_truncate_mortality(age, mort)
+  )
+
+
+
+g_df_mort_avg_all$rain <- base::as.factor(g_df_mort_avg_all$rain)
+g_df_mort_avg_all$rain <- base::ordered(g_df_mort_avg_all$rain)
+
+
+p2 <- ggplot(data = g_df_mort_avg_all,
+       aes(x = age,
+           y = mort,
+           color = rain)) +
+  geom_line(size = 1.2,
+            alpha = 0.7) +
+  scale_color_manual(
+    name = "Rainfall scenario",
+    values = c("#D55E00", "#E69F00", "black", "#56B4E9", "#0072B2"),
+    labels = c(
+      "\u2013200 mm below average",
+      "\u2013100 mm below average",
+      "long-term average [454 mm]",
+      "+100 mm above average",
+      "+200 mm above average"
+    )
+  ) +
+  theme_classic() +
+  xlab("Plant age (years)") +
+  ylab("Mortality") +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_mort_max,
+      linetype = "max plant mortality"),
+    color = "black"
+  ) +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_recruit_min,
+      linetype = "min recruit mortality"),
+    color = "black"
+  ) +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_mort_min,
+      linetype = "min plant mortality"),
+    color = "black"
+  ) +
+  theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  ) +
+  ggplot2::scale_linetype_manual(
+    name = "",
+    breaks = c(
+      "max plant mortality", 
+      "min recruit mortality", 
+      "min plant mortality"),
+    values = c(2, 3, 4)
+  ) +
+  ggplot2::ggtitle("(b)")
+
+
+###############################################
+g_df_mort_min_long <- g_df_mort_min
+
+g_df_mort_min_long <- g_df_mort_min_long %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_min(age, 454))
+
+g_df_mort_min_long$rain <- "454"
+
+# +100 mm
+g_df_mort_min_plus100 <- g_df_mort_min
+g_df_mort_min_plus100 <- g_df_mort_min_plus100 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_min(age, 554))
+
+g_df_mort_min_plus100$rain <- "554"
+
+# +200 mm
+g_df_mort_min_plus200 <- g_df_mort_min
+g_df_mort_min_plus200 <- g_df_mort_min_plus200 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_min(age, 654))
+
+g_df_mort_min_plus200$rain <- "654"
+
+# -100 mm
+g_df_mort_min_minus100 <- g_df_mort_min
+g_df_mort_min_minus100 <- g_df_mort_min_minus100 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_min(age, 354))
+
+g_df_mort_min_minus100$rain <- "354"
+
+# -200 mm
+g_df_mort_min_minus200 <- g_df_mort_min
+g_df_mort_min_minus200 <- g_df_mort_min_minus200 %>% 
+  group_by(age, scn) %>%
+  mutate(mort = fun_mort_min(age, 254))
+
+g_df_mort_min_minus200$rain <- "254"
+
+g_df_mort_min_all <- base::rbind(
+  g_df_mort_min_plus200,
+  g_df_mort_min_plus100,
+  g_df_mort_min_long,
+  g_df_mort_min_minus100,
+  g_df_mort_min_minus200
+)
+
+# truncate mortality probability
+g_df_mort_min_all <- g_df_mort_min_all %>% 
+  mutate(
+    mort = fun_truncate_mortality(age, mort)
+  )
+
+
+
+g_df_mort_min_all$rain <- base::as.factor(g_df_mort_min_all$rain)
+g_df_mort_min_all$rain <- base::ordered(g_df_mort_min_all$rain)
+
+p3 <- ggplot(data = g_df_mort_min_all,
+       aes(x = age,
+           y = mort,
+           color = rain)) +
+  geom_line(size = 1.2,
+            alpha = 0.7) +
+  scale_color_manual(
+    name = "Rainfall scenario",
+    values = c("#D55E00", "#E69F00", "black", "#56B4E9", "#0072B2"),
+    labels = c(
+      "\u2013200 mm below average",
+      "\u2013100 mm below average",
+      "long-term average [454 mm]",
+      "+100 mm above average",
+      "+200 mm above average"
+    )
+  ) +
+  theme_classic() +
+  xlab("Plant age (years)") +
+  ylab("Mortality") +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_mort_max,
+      linetype = "max plant mortality"),
+    color = "black"
+  ) +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_recruit_min,
+      linetype = "min recruit mortality"),
+    color = "black"
+  ) +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_mort_min,
+      linetype = "min plant mortality"),
+    color = "black"
+  ) +
+  theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  ) +
+  ggplot2::scale_linetype_manual(
+    name = "",
+    breaks = c(
+      "max plant mortality", 
+      "min recruit mortality", 
+      "min plant mortality"),
+    values = c(2, 3, 4)
+  ) +
+  ggplot2::ggtitle("(c)")
+
+
+
+pleyend <- ggplot() +
+  geom_line(
+    data = g_df_mort_min_all,
+    mapping = ggplot2::aes(
+      x = age,
+      y = mort,
+      color = rain), 
+    size = 1.2,
+    alpha = 0.7) +
+  scale_color_manual(
+    name = "Rainfall scenario",
+    values = c("#D55E00", "#E69F00", "black", "#56B4E9", "#0072B2"),
+    labels = c(
+      "\u2013200 mm below average",
+      "\u2013100 mm below average",
+      "long-term average [454 mm]",
+      "+100 mm above average",
+      "+200 mm above average"
+    )
+  ) +
+  ggplot2::xlim(0, 0) +
+  ggplot2::ylim(0, 0) +
+  ggtitle(" ") +
+  theme(
+    legend.position = c(0.5, 0.5),
+    legend.text  = element_text(size = 28, face = "plain"),
+    legend.title = element_text(size = 28, face = "bold"),
+    legend.key.size = unit(3, "line")
+  ) +
+  # guides(colour = guide_legend(override.aes = list(size = 9))) +
+  theme_void() +
+  xlab("Plant age (years)") +
+  ylab("Annual mortality probability") +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_mort_max,
+      linetype = "max plant mortality"),
+    color = "black"
+  ) +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_recruit_min,
+      linetype = "min recruit mortality"),
+    color = "black"
+  ) +
+  geom_hline(
+    mapping = ggplot2::aes(
+      yintercept = g_mort_min,
+      linetype = "min plant mortality"),
+    color = "black"
+  ) +
+  ggplot2::scale_linetype_manual(
+    name = "",
+    breaks = c(
+      "max plant mortality", 
+      "min recruit mortality", 
+      "min plant mortality"),
+    values = c(2, 3, 4)
+  )
+
+
+g_parr <- ggpubr::ggarrange(
+  p1, p2, p3, pleyend, 
+  ncol = 2,
+  nrow = 2
+)
+
+g_parr
+
+# save plot (uncomment code to save image)
+ggplot2::ggsave(
+  plot = g_parr,
+  filename = base::paste0("mort_scenario_curves_NEW_dpi300.tiff"),
+  path = "./data/plots",
+  width = 3.31 * 2,
+  height = 3.31 * 2,
+  bg = "white",
+  dpi = 300
+)
+
+```
+
+The initial number of plants in each occupied dune.
+
+located in data/calibration/02_cali
+
+```{r}
+#| label: dune
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+#| eval: false
+
+# load necessary packages
+library(dplyr)
+
+# read dune data from previous papers (He et al., 2004, 2010)
+g_file_path <- "data/papers/"
+g_file_name <- "He2004_2010_dune_data.csv"
+
+g_file_name <- base::paste0(g_file_path, g_file_name)
+
+g_dunes <- utils::read.csv(g_file_name, sep = ',')
+
+g_dunes <- g_dunes %>% 
+  dplyr::filter(!base::is.na(code_he2010))
+
+# first estimate of prefire pop size in NA dunes
+g_dunes <- g_dunes %>% 
+  dplyr::mutate(
+    prefire_pop = base::ifelse(
+      base::is.na(prefire_pop_size_he2004),
+      100,
+      prefire_pop_size_he2004
+    ) 
+  )
+
+g_dunes <- g_dunes %>% 
+  dplyr::mutate(pop_size_he2010 = dune_area_ha_he2010 * pop_density_he2010)
+
+g_dunes <- g_dunes[base::order(g_dunes$code_he2010), ]
+```
+
+Calibration of prefire population for each mortality scenario keeping
+linear relationship between prefire population size and predicted mean
+population size in 2006 (8 year-old plants). I used the so-called
+"cross-multiplication" method
+https://en.wikipedia.org/wiki/Cross-multiplication
+
+So we can say that the new prefire population size was calculated using
+the cross-multiplication knowing the first estimated prefire population,
+the observed population size in 2006 and the predicted population size
+in 2006.
+
+NOTE: the mortality scenarios 3 and 4 have the same number of initial
+plants (i.e. prefire population size), because there is no LDD (and thus
+no immigrants)
+
+```{r}
+#| label: cali-2-prefire_pop_size
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+#| eval: false
+#| cache: true
+#| cache-globals: g_dunes
+
+# load libraries
+library(plyr)
+library(dplyr)
+
+# load utils
+base::source("utils/read_multiple_files.R")
+
+# read calibration 02
+# initial prefire population size for each mortality scenario
+# mort scn 0: age-weather mortality curves (Souto-Veiga et al., 2022)
+# mort scn 2: spring and autumn mortality curves, arithmetic mean
+# mort scn 3: LDD cohorts (spring) and SDD cohorts (autumn)
+
+g_file_path <- "data/sim_outputs/calibration/02_01_cali_prefire_pop/raw"
+g_sim_type <- "*seed_dynamics.csv"
+
+# read files and create df
+g_df <- fun_read_files(g_file_path, g_sim_type)
+
+# population size in 2006 (8-year-old plants) for each mortality scenario
+g_df <- g_df %>% 
+  dplyr::filter(year == 8) %>% 
+  dplyr::group_by(sim_id, pop) %>% 
+  dplyr::summarise(
+    mean_plants = base::round(base::mean(num_plants), 2),
+    sd_cones   = base::round(stats::sd(num_plants), 2)
+  )
+
+# merge calculated data with observed data
+g_df <- base::merge(
+  x = g_dunes, 
+  y = g_df, 
+  by.x = "code_he2010", 
+  by.y = "pop"
+)
+
+# take only dunes from He et al., 2010
+g_df <- g_df %>% 
+  dplyr::filter(!base::is.na(code_he2010))
+
+# difference between calculated vs observed population size
+g_df <- g_df %>% 
+  dplyr::mutate(error_abs = mean_plants - pop_size_he2010)
+
+g_df <- g_df %>% 
+  dplyr::mutate(
+    error_pct = base::round(
+      base::abs(mean_plants - pop_size_he2010) / pop_size_he2010 * 100,
+      2
+    )
+  )
+
+# calculate new prefire population size for each mortality scenario
+g_df <- g_df %>% 
+  dplyr::mutate(
+    new_prefire_pop = base::round(prefire_pop * pop_size_he2010 / mean_plants)
+)
+
+# order df by mortality scn and population id
+g_df <- g_df[base::order(g_df$sim_id, g_df$code_he2010), ]
+
+g_df_small <- g_df[, c(10, 1, 9, 11, 12, 13, 14, 6, 15)]
+
+# change colnames of all columns
+base::colnames(g_df_small) <- c(
+  "sim id", 
+  "pop id", 
+  "observed plants", 
+  "mean plants",
+  "sd plants",
+  "abs error",
+  "pct error",
+  "prefire pop",
+  "new prefire pop"
+)
+
+knitr::kable(
+  g_df_small, 
+  caption = "Table 1. Calibration of prefire population for each mortality 
+  scenario"
+)
+
+
+# utils::write.csv(x = g_df_small, file = "foo.csv")
+```
+
+Check the observed vs predicted population sizes in 2006 (8 year-old
+plants)
+
+The value above 10% error is in the row number 23, with 17.85% error.
+This is because the population sizes are too small, i.e. 13 plants and
+10.68 plants (observed and predicted mean).
+
+```{r}
+#| label: cali-2-prefire-pop-size-check
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+#| eval: false
+#| cache: true
+#| cache-globals: g_dunes
+
+# load libraries
+library(plyr)
+library(dplyr)
+
+# load utils
+base::source("utils/read_multiple_files.R")
+
+# read calibration 02 check
+# initial prefire population size for each mortality scenario
+# mort scn 0: age-weather mortality curves (Souto-Veiga et al., 2022)
+# mort scn 2: spring and autumn mortality curves, arithmetic mean
+# mort scn 3: LDD cohorts (spring) and SDD cohorts (autumn)
+
+g_file_path <- "data/sim_outputs/calibration/03_cali_init_plants_mort_scn_check/raw"
+g_sim_type <- "*seed_dynamics.csv"
+
+# read files and create df
+g_df <- fun_read_files(g_file_path, g_sim_type)
+
+# population size in 2006 (8-year-old plants) for each mortality scenario
+g_df <- g_df %>% 
+  dplyr::filter(year == 8) %>% 
+  dplyr::group_by(sim_id, pop) %>% 
+  dplyr::summarise(
+    mean_plants = base::round(base::mean(num_plants), 2),
+    sd_cones = base::round(stats::sd(num_plants), 2)
+  )
+
+# merge calculated data with observed data
+g_df <- base::merge(
+  x = g_dunes, 
+  y = g_df, 
+  by.x = "code_he2010", 
+  by.y = "pop"
+)
+
+# take only dunes from He et al., 2010
+g_df <- g_df %>% 
+  dplyr::filter(!base::is.na(code_he2010))
+
+# difference between calculated vs observed population size
+g_df <- g_df %>% 
+  dplyr::mutate(error_abs = mean_plants - pop_size_he2010)
+
+g_df <- g_df %>% 
+  dplyr::mutate(
+    error_pct = base::round(
+      base::abs(mean_plants - pop_size_he2010) / pop_size_he2010 * 100,
+      2
+    )
+  )
+
+# order df by mortality scn and population id
+g_df <- g_df[base::order(g_df$sim_id, g_df$code_he2010), ]
+
+g_df_small <- g_df[, c(10, 1, 9, 11, 12, 13, 14)]
+
+# change colnames of all columns
+base::colnames(g_df_small) <- c(
+  "sim id", 
+  "pop id", 
+  "observed plants", 
+  "mean plants",
+  "sd plants",
+  "abs error",
+  "pct error"
+)
+
+knitr::kable(
+  g_df_small,
+  caption = "Table 2. Check the percentage error of the calibration of prefire 
+  pop size calculated in Table 1"
+)
+```
+
+# 3. LDD
+
+## 3.1 Dispersal kernel of seeds by postfire wind
+
+```{r}
+#| label: dispersal-kernel-wind
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+library(fitdistrplus)
+library(knitr)
+
+# read dune data from previous papers (He et al., 2004, 2010)
+g_file_path <- "data/papers/"
+g_file_name <- "He2010_table3_immigrants.csv"
+
+g_file_name <- base::paste0(g_file_path, g_file_name)
+
+g_df <- utils::read.csv(g_file_name, sep = ',')
+
+# get columns distance_km, remove NAs and convert to meters
+g_df <- base::as.data.frame(g_df$distance_km)
+g_df <- stats::na.omit(g_df)
+base::colnames(g_df)[1] <- "distance_m"
+g_df$distance_m <- g_df$distance_m * 1000
+
+# histogram (density scale) and CDF. The distribution is unimodal (one peak)
+# and skewed to the right, as expected
+fitdistrplus::plotdist(g_df$distance_m, histo = TRUE, demp = TRUE)
+
+# skewness-kurtosis plot. The distribution is highly skewed to the right 
+# estimated skewness 1.31. The kurtoses is > 3 (5.17), thus leptokurtic
+fitdistrplus::descdist(g_df$distance_m, boot = 1000)
+
+# fitting pdf. Weibull, gamma, and log-norm
+g_fw <- fitdistrplus::fitdist(g_df$distance_m, "weibull")
+g_fg <- fitdistrplus::fitdist(g_df$distance_m, "gamma")
+g_fln <- fitdistrplus::fitdist(g_df$distance_m, "lnorm")
+
+# model selection based on AIC values. The three distributions show very
+# similar values. The best (lowers AIC value) is the lognorm distritbution.
+# Furthermore, lognorm is typically used for LDD, since outperforms many other
+# distributions (Nathan et al., 2012). Also, Frank Schurr recommended lognorm
+# summary(g_fw)
+# summary(g_fln)
+# summary(g_fg)
+
+# get aic values for each distribution
+g_fw_aic <- base::data.frame(distribution = "weibull", AIC = g_fw$aic)
+g_fg_aic <- base::data.frame(distribution = "gamma", AIC = g_fg$aic)
+g_fln_aic <- base::data.frame(distribution = "lognorm", AIC = g_fln$aic)
+
+g_aic <- base::rbind(g_fw_aic, g_fg_aic, g_fln_aic)
+
+knitr::kable(g_aic, caption = "AIC values of the three distribution tested")
+
+
+graphics::par(mfrow = c(2, 2))
+plot.legend <- c("weibull", "gamma", "lognormal")
+fitdistrplus::denscomp(list(g_fw, g_fg, g_fln), legendtext = plot.legend)
+fitdistrplus::qqcomp(list(g_fw, g_fg, g_fln), legendtext = plot.legend)
+fitdistrplus::cdfcomp(list(g_fw, g_fg, g_fln), legendtext = plot.legend)
+fitdistrplus::ppcomp(list(g_fw, g_fg, g_fln), legendtext = plot.legend)
+
+base::print("Selected dispersal kernel:")
+
+# SVG graphics device
+svg("./data/plots/wind_density_kernel.svg")
+
+# plot
+graphics::par(mfrow = c(1, 1), ps = 18)
+graphics::hist(
+  g_df$distance_m, breaks = 11, prob = TRUE,
+  xlab = "Distance (m)",
+  ylab = "Density",
+  size = 3,
+  xlim = c(0, 3500),
+  ylim = c(0, 0.0015),
+  xaxis = "i",
+  yaxis = "i",
+  main = ""
+)
+graphics::lines(
+  dlnorm(base::seq(0, 3500, 1), meanlog = 6.7872, sdlog = 0.6756), 
+  lwd = 3, col = "#0073C2FF"
+)
+
+# close the graphics device
+dev.off()
+
+```
+
+## 3.2 Number of seeds per dispersed cone
+
+Fit the number of follicles per cone to estimate the distribution
+
+```{r}
+#| label: follicles-cone-baseline
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+library(fitdistrplus)
+library(knitr)
+
+# read dune data from previous papers (He et al., 2004, 2010)
+g_file_path <- "data/papers/"
+g_file_name <- "eneabba_follicles_per_cone.csv"
+
+g_file_name <- base::paste0(g_file_path, g_file_name)
+
+g_df <- utils::read.csv(g_file_name, sep = ',')
+
+# histogram (density scale) and CDF.
+fitdistrplus::plotdist(g_df$X1986, histo = TRUE, demp = TRUE)
+
+# skewness-kurtosis plot.
+fitdistrplus::descdist(g_df$X1986, boot = 1000)
+
+# fitting most common discrete denstiy functions: Poisson, nbinom, and geom
+fit_p <- fitdistrplus::fitdist(g_df$X1986, "pois")
+fit_nb <- fitdistrplus::fitdist(g_df$X1986, "nbinom")
+fit_g <- fitdistrplus::fitdist(g_df$X1986, "geom")
+
+# get aic values for each distribution
+fit_p_aic <- data.frame(distribution = "poisson", AIC = fit_p$aic)
+fit_nb_aic <- data.frame(distribution = "negative binomial", AIC = fit_nb$aic)
+fit_g_aic <- data.frame(distribution = "geometric", AIC = fit_g$aic)
+
+g_aic <- base::rbind(
+  fit_p_aic, 
+  fit_nb_aic, 
+  fit_g_aic
+)
+
+knitr::kable(g_aic, caption = "AIC values of the three distribution tested")
+
+graphics::par(mfrow = c(2, 2))
+plot.legend <- c("poisson", "negative binomial", "geometric")
+fitdistrplus::denscomp(list(fit_p, fit_nb, fit_g), legendtext = plot.legend)
+fitdistrplus::qqcomp(list(fit_p, fit_nb, fit_g), legendtext = plot.legend)
+fitdistrplus::cdfcomp(list(fit_p, fit_nb, fit_g), legendtext = plot.legend)
+fitdistrplus::ppcomp(list(fit_p, fit_nb, fit_g), legendtext = plot.legend)
+
+# base::print("Selected dispersal kernel:")
+# 
+# graphics::par(mfrow = c(1, 1), ps = 18)
+# graphics::hist(
+#   g_df$X1986, breaks = 11, prob = TRUE,
+#   xlab = "# of follicles per cone",
+#   ylab = "density",
+#   main = "Lognorm: meanlog = 6.787, sdlog = 0.676",
+#   size = 3
+# )
+# graphics::barplot(
+#   dnbinom(base::seq(0, 20, 1), size = fit_nb$estimate[1], mu = fit_nb$estimate[2]), 
+#   lwd = 2, col = "#0073C2FF"
+# )
+
+g_df_follicles_base <- base::as.data.frame(g_df$X1986)
+g_df_follicles_current <- base::as.data.frame(g_df$X2018)
+
+g_df_follicles_current <- stats::na.omit(g_df_follicles_current)
+
+
+
+g_df_follicles_base$scenario <- "Baseline"
+g_df_follicles_current$scenario <- "Current"
+
+base::colnames(g_df_follicles_base) <- c("follicles", "scenario")
+base::colnames(g_df_follicles_current) <- c("follicles", "scenario")
+
+
+g_df_follicles_all <- base::rbind(g_df_follicles_base, g_df_follicles_current)
+
+p_follicles_all <- ggplot(
+  data = g_df_follicles_all,
+  mapping = aes(
+    x = scenario,
+    y = follicles,
+    fill = scenario)) +
+  geom_boxplot(
+    alpha = 0.6,
+    outlier.shape = 1,
+    notch = TRUE,
+    notchwidth = 0.5
+  ) +
+  geom_jitter(
+    width = 0.2,
+    size = 1,
+    alpha = 0.4,
+    shape = 21,
+    color = "black",
+    fill = "black"
+  ) + 
+  scale_fill_manual(    
+    name = "Scenario",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("Baseline", "Current")
+  ) +
+  guides(fill = FALSE) +
+  theme_classic() +
+  xlab("Climate scenarios") +
+  ylab("# of follicles per cone") +
+  scale_y_continuous(
+    breaks = base::seq(from = 0, to = 25, by = 5)
+  ) +
+    ggplot2::coord_cartesian(ylim = c(0, 28)) +
+  theme(text = element_text(size = 12, face = "bold"),
+        axis.text    = element_text(size = 12),
+        axis.title   = element_text(size = 12, face = "bold"),
+        legend.text  = element_text(size = 12),
+        legend.title = element_text(size = 12, face = "bold")) +
+  ggsignif::geom_signif(test = "wilcox.test", comparisons = list(c(1, 2)), 
+                        map_signif_level = TRUE, y_position = 25) +
+  ggtitle("(a)")
+# labs(subtitle = rstatix::get_test_label(stat_test, detailed = TRUE))
+
+
+```
+
+```{r}
+#| label: follicles-cone-current
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+library(fitdistrplus)
+library(knitr)
+
+# read dune data from previous papers (He et al., 2004, 2010)
+g_file_path <- "data/papers/"
+g_file_name <- "eneabba_follicles_per_cone.csv"
+
+g_file_name <- base::paste0(g_file_path, g_file_name)
+
+g_df <- utils::read.csv(g_file_name, sep = ',')
+
+g_df <- na.omit(g_df)
+
+# histogram (density scale) and CDF
+fitdistrplus::plotdist(g_df$X2018, histo = TRUE, demp = TRUE)
+
+# skewness-kurtosis plot
+fitdistrplus::descdist(g_df$X2018, boot = 1000)
+
+# fitting most common discrete denstiy functions: Poisson, nbinom, and geom
+fit_p <- fitdistrplus::fitdist(g_df$X2018, "pois")
+fit_nb <- fitdistrplus::fitdist(g_df$X2018, "nbinom")
+fit_g <- fitdistrplus::fitdist(g_df$X2018, "geom")
+
+# get aic values for each distribution
+fit_p_aic <- data.frame(distribution = "poisson", AIC = fit_p$aic)
+fit_nb_aic <- data.frame(distribution = "negative binomial", AIC = fit_nb$aic)
+fit_g_aic <- data.frame(distribution = "geometric", AIC = fit_g$aic)
+
+g_aic <- base::rbind(
+  fit_p_aic, 
+  fit_nb_aic, 
+  fit_g_aic
+)
+
+knitr::kable(g_aic, caption = "AIC values of the three distribution tested")
+
+
+graphics::par(mfrow = c(2, 2))
+plot.legend <- c("poisson", "negative binomial", "geometric")
+fitdistrplus::denscomp(list(fit_p, fit_nb, fit_g), legendtext = plot.legend)
+fitdistrplus::qqcomp(list(fit_p, fit_nb, fit_g), legendtext = plot.legend)
+fitdistrplus::cdfcomp(list(fit_p, fit_nb, fit_g), legendtext = plot.legend)
+fitdistrplus::ppcomp(list(fit_p, fit_nb, fit_g), legendtext = plot.legend)
+
+# base::print("Selected dispersal kernel:")
+# 
+# graphics::par(mfrow = c(1, 1), ps = 18)
+# graphics::barplot(
+#   dpois(base::seq(0, 20, 1), lambda = fit_p$estimate[1]), 
+#   lwd = 2, col = "#EFC000FF"
+# )
+
+```
+
+```{r}
+#| label: follicles-in-dispersed-cones
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+library(tidyr)
+library(ggplot2)
+
+# the first two hours the canopy is divided by half due to the heat of the fire
+# this is taken also the old cones, however, birds will go for the
+# younger cones because they have more seeds and are more accessible
+
+g_n = 0:26
+
+g_df <- data.frame(
+  events = g_n, 
+  baseline = dnbinom(x = g_n, size = 6.219, mu = 10.08),
+  current = dpois(x = g_n, lambda = 7.325)
+)
+
+# pivot data from wide to long
+g_df_tidy <- g_df %>% 
+  tidyr::pivot_longer(
+    -c(events),
+    names_to = "Scenario",
+    values_to = "Density"
+  )
+
+# plot
+p_follicles_distr <- ggplot(
+  data = g_df_tidy, 
+  mapping = aes(
+    x = factor(events),
+    y = Density,
+    fill = Scenario)) +
+  geom_col(position = "dodge") +
+  labs(x = "# of follicles per cone", y = "Density") +
+  theme_classic() +
+  scale_fill_manual(
+    name = "Scenario:",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("Baseline", "Current")
+  ) +
+  scale_x_discrete(breaks = seq(0, 26, 4)) +
+  ggplot2::theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 12, face = "bold"),
+    strip.text.x = element_blank(),
+    strip.background = element_rect(colour = "white", fill = "white"),
+    legend.position = c(0.85, 0.7)
+  ) +
+  ggtitle("(b)")
+
+
+
+g_parr <- ggpubr::ggarrange(
+  p_follicles_all,
+  p_follicles_distr,
+  ncol = 1,
+  nrow = 2,
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+
+
+# save plot (uncomment code to save image)
+ggplot2::ggsave(
+  plot = g_parr,
+  filename = base::paste0("follicles_distr_a_b_dpi300.tiff"),
+  path = "./data/plots",
+  width = 3.31,
+  height = 3.31 * 2,
+  bg = "white",
+  dpi = 300
+)
+
+```
+
+## 3.3 Calibration of proportion of dispersed cones and seeds
+
+Calibratrion criteria is 10% error of the observed immigration
+percentage and average number of populations per dune in He et al.,
+(2010)
+
+```{r}
+#| label: cali-3
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(plyr)
+library(dplyr)
+# library(easycsv)
+library(ggplot2)
+library(cowplot)
+library(hrbrthemes)
+library(viridis)
+
+# load utils
+base::source("utils/pooled_sd.R")
+base::source("utils/read_multiple_files.R")
+
+# input files
+g_path <- "data/sim_outputs/calibration/03_cali"
+g_sim_type <- "*metapop_dynamics.csv"
+
+# output figure
+g_figure_name <- "03_cali_perc_10_years_8_NEW_dpi1200"
+
+# calibration reference values
+g_percentage <- 10
+g_immi_min <- 5.5
+g_immi_max <- 6.8
+g_pop_max <- 4
+
+# read files and create df
+g_df <- fun_read_files(paste0(g_path, "/raw"), g_sim_type)
+
+##############################################
+## read from zip. It takes too long
+# easycsv::fread_zip(
+#   base::paste0(`g_path, g_file, ".zip"), 
+#   extension = "CSV", 
+#   sep = ',', 
+#   data.table = FALSE
+# )
+# 
+# g_df <- do.call(rbind, mget(ls(pattern = g_file)))
+# 
+# # remove them from global environment
+# rm(list = ls(pattern = g_file))
+#############################################
+
+# population size in 2006 (8-year-old plants) for each mortality scenario
+g_df_immi_perc <- g_df %>% 
+  dplyr::filter(year == 8) %>%
+  dplyr::group_by(sim_id, study_num) %>% 
+  dplyr::summarise(
+    mean_immi_perc = base::mean(immi_perc),
+    sd_immi_perc = stats::sd(immi_perc)
+)
+
+g_df_immi <- g_df %>% 
+  # dplyr::filter(year == 5 | year == 8) %>%
+  dplyr::filter(year == 8) %>%
+  dplyr::group_by(sim_id, study_num) %>% 
+  dplyr::summarise(
+    mean_immi = base::mean(immi),
+    sd_immi = stats::sd(immi)
+)
+
+g_df_immi_perc <- g_df_immi_perc %>% 
+  dplyr::group_by(sim_id) %>% 
+  dplyr::summarise(
+    grand_mean_immi_perc = base::mean(mean_immi_perc),
+    grand_sd_immi_perc = fun_pooled_sd_equal_sample_sizes(sd_immi_perc)
+  )
+
+g_df_immi <- g_df_immi %>% 
+  dplyr::group_by(sim_id) %>% 
+  dplyr::summarise(
+    grand_mean_immi = base::mean(mean_immi),
+    grand_sd_immi = fun_pooled_sd_equal_sample_sizes(sd_immi)
+  )
+
+g_df_pops <- g_df %>% 
+  # dplyr::filter(year == 5 | year == 8) %>%
+  dplyr::filter(year == 8) %>%
+  dplyr::group_by(sim_id, study_num) %>% 
+  dplyr::summarise(
+    mean_popids = base::mean(pops_mean),
+    sd_popids = stats::sd(pops_mean)
+  )
+
+g_df_pops <- g_df_pops %>% 
+  dplyr::group_by(sim_id) %>% 
+  dplyr::summarise(
+    grand_mean_popids = base::mean(mean_popids),
+    grand_sd_popids   = fun_pooled_sd_equal_sample_sizes(sd_popids)
+  )
+
+g_df_immi_perc_mean <- g_df_immi_perc %>% 
+  dplyr::select(
+    sim_id, 
+    grand_mean_immi_perc, 
+    grand_sd_immi_perc) %>% 
+  dplyr::mutate(stat_measure = "immigrants")
+
+
+colnames(g_df_immi_perc_mean)[colnames(g_df_immi_perc_mean)
+%in% c("grand_mean_immi_perc", "grand_sd_immi_perc")] <- c("mean", "sd")
+
+g_df_immi_perc_mean <- g_df_immi_perc_mean %>% 
+  dplyr::mutate(
+    is_within = ifelse(
+      mean >= (g_immi_min * (100 - g_percentage) / 100) & 
+        mean <= (g_immi_max * (100 + g_percentage) / 100),
+      TRUE,
+      FALSE
+    )
+  )
+
+g_df_pops_mean <- g_df_pops %>% 
+  dplyr::select(sim_id, grand_mean_popids, grand_sd_popids) %>% 
+  dplyr::mutate(stat_measure = "populations")
+
+colnames(g_df_pops_mean)[colnames(g_df_pops_mean)
+%in% c("grand_mean_popids", "grand_sd_popids")] <- c("mean", "sd")
+
+g_df_pops_mean <- g_df_pops_mean %>% 
+  dplyr::mutate(
+    is_within = ifelse(
+      # mean >= 2 & mean <= (g_pop_max * (100 + g_percentage) / 100),
+      mean >= 2,
+      TRUE,
+      FALSE
+    )
+  )
+
+# read simulation parameters
+g_files <- base::list.files(
+  path = base::paste0(g_path, "/in/sim"),
+  pattern = "*_simfile.csv",
+  full.names = TRUE
+)
+
+g_params <- plyr::ldply(
+  g_files,
+  utils::read.table,
+  sep = " ",
+  fill = TRUE,
+  header = TRUE
+)
+
+# take the parameter values for plotting
+g_params <- g_params[, c("sim_id", "val1", "val2", "val3")]
+
+# rename columns
+base::colnames(g_params) <- c("sim_id", "mort", "birds_prop", "wind_prop")
+
+# g_df <- base::merge(x = g_params, y = g_df, by = "sim_id")
+
+# rm(g_df)
+
+g_df_immi_abs <- base::merge(x = g_params, y = g_df_immi, by = "sim_id")
+g_df_immi_abs$mort <- base::as.factor(g_df_immi_abs$mort)
+
+g_df_cali <- base::rbind(g_df_immi_perc_mean, g_df_pops_mean)
+g_df_cali <- base::merge(x = g_params, y = g_df_cali, by = "sim_id")
+g_df_cali <- dplyr::arrange(g_df_cali, sim_id)
+g_df_cali$stat_measure <- base::as.factor(g_df_cali$stat_measure)
+g_df_cali$mort <- base::as.factor(g_df_cali$mort)
+g_df_cali$birds_prop <- g_df_cali$birds_prop * 100
+g_df_cali$wind_prop <- g_df_cali$wind_prop * 100
+
+
+# - % immigration = [4.9%, 7.48%]
+# - # pop ids per population: > 2 and < 4 pop ids per population
+# - distance: mean = [900 m, 1210 m], 
+#             sd = [666 m, 814 m], 
+#             min = [288 m, 352 m], 
+#             max = [2970 m, 3630 m]
+
+
+########################################
+
+cb_palette <- c(
+  # "#999999",
+  "#E69F00",
+  "#56B4E9",
+  "#009E73",
+  "#F0E442",
+  # "#0072B2",
+  # "#D55E00",
+  "#CC79A7"
+)
+
+g_df_cali_recode <- g_df_cali %>%
+  dplyr::mutate(
+    mort = dplyr::recode(
+      mort, 
+      "scn_cali_03_mort_0.csv" = "(a)", 
+      "scn_cali_03_mort_2.csv" = "(b)",
+      "scn_cali_03_mort_3.csv" = "(c)",
+      "scn_cali_03_mort_4.csv" = "(d)"
+    )
+  )
+
+p1 <- g_df_cali_recode %>% 
+  dplyr::filter(is_within == TRUE) %>% 
+  ggplot(mapping = aes(
+    x = wind_prop, 
+    y = birds_prop,
+    col = stat_measure,
+    color = stat_measure,
+    shape = stat_measure
+  )) +
+  geom_point(size = 3) +
+  # scale_fill_manual(
+  #   # name = "Vector and location",
+  #   #values =  c("#999999", "#E69F00", "#56B4E9", "#009E73")
+  #   values = cb_palette
+  # ) +
+  scale_color_manual(
+    name = "Measure:",
+    # values =  c("#999999", "#E69F00", "#56B4E9", "#009E73")
+    values = cb_palette
+  ) +
+  xlab("Seeds by wind (%)") +
+  ylab("Cones by birds (%)") +
+  coord_cartesian(xlim = c(0, 20), ylim = c(0, 20)) +
+  # xlim(c(0, 0.2)) +
+  # ylim(c(0, 0.2)) +
+  # ggtitle("") +
+  scale_shape_manual(
+    name = "Measure:",
+    values = c(4, 0)
+  ) +
+  theme_minimal() +
+  scale_x_continuous(minor_breaks = seq(0, 20, 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 20, 1)) +
+  theme(
+    text         = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(
+      color = "lightgrey", 
+      size = 0.5, 
+      linetype = 1),
+    legend.position = "bottom"
+  ) +
+  ggplot2::facet_wrap(
+    ~mort
+  )
+
+ggplot2::ggsave(
+  plot = p1,
+  filename = base::paste0(g_figure_name, "_dpi300.tiff"),
+  path = base::paste0(g_path, "/plots"),
+  width = 2 * 3,
+  height = 6,
+  bg = "white",
+  dpi = 300
+)
+
+
+
+p2 <- g_df_cali %>% 
+  dplyr::filter(stat_measure == "immigrants") %>%
+  ggplot(mapping = aes(
+    x = wind_prop, 
+    y = birds_prop,
+    fill = mean
+  )) +
+  geom_tile() +
+  geom_text(aes(label = round(mean, 2)), color = "black", size = 4) +
+  # scale_fill_gradient(low="white", high="blue") +
+  viridis::scale_fill_viridis(discrete = FALSE) +
+  xlab("proportion of seeds by wind") +
+  ylab("proportion of cones by birds") +
+  coord_cartesian(xlim = c(0, 20), ylim = c(0, 20)) +
+  scale_shape_manual(
+    name = "Measure",
+    values = c(4, 0)
+  ) +
+  theme_minimal() +
+  # hrbrthemes::theme_ipsum() +
+  scale_x_continuous(minor_breaks = seq(0, 20, 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 20, 1)) +
+  theme(
+    text         = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(
+      color = "lightgrey", 
+      size = 0.5, 
+      linetype = 1),
+    legend.position = "bottom"
+  ) +
+  ggplot2::facet_wrap(
+    ~mort
+  )
+
+p3 <- g_df_cali %>% 
+  dplyr::filter(stat_measure == "populations") %>%
+  ggplot(mapping = aes(
+    x = wind_prop, 
+    y = birds_prop,
+    fill = mean
+  )) +
+  geom_tile() +
+  # geom_text(aes(label = round(mean, 2)), color = "black", size = 4) +
+  # scale_fill_gradient(low="white", high="blue") +
+  viridis::scale_fill_viridis(discrete = FALSE) +
+  xlab("proportion of seeds by wind") +
+  ylab("proportion of cones by birds") +
+  coord_cartesian(xlim = c(0, 20), ylim = c(0, 20)) +
+  scale_shape_manual(
+    name = "Measure",
+    values = c(4, 0)
+  ) +
+  theme_minimal() +
+  # hrbrthemes::theme_ipsum() +
+  scale_x_continuous(minor_breaks = seq(0, 20, 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 20, 1)) +
+  theme(
+    text         = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(
+      color = "lightgrey", 
+      size = 0.5, 
+      linetype = 1),
+    legend.position = "bottom"
+  ) +
+  ggplot2::facet_wrap(
+    ~mort
+  )
+
+####################################################
+
+p4 <- g_df_immi_abs %>% 
+  ggplot(mapping = aes(
+    x = wind_prop, 
+    y = birds_prop,
+    fill = grand_mean_immi
+  )) +
+  geom_tile() +
+  # geom_text(aes(label = round(mean, 2)), color = "black", size = 4) +
+  # scale_fill_gradient(low="white", high="blue") +
+  viridis::scale_fill_viridis(discrete = FALSE) +
+  # scale_fill_brewer(palette = "Spectral") +
+  # scale_fill_fermenter() +
+  xlab("proportion of seeds by wind") +
+  ylab("proportion of cones by birds") +
+  # coord_cartesian(xlim = c(0, 20), ylim = c(0, 20)) +
+  scale_shape_manual(
+    name = "Measure",
+    values = c(4, 0)
+  ) +
+  theme_minimal() +
+  # hrbrthemes::theme_ipsum() +
+  # scale_x_continuous(minor_breaks = seq(0, 20, 1)) +
+  # scale_y_continuous(minor_breaks = seq(0, 20, 1)) +
+  theme(
+    text         = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(
+      color = "lightgrey", 
+      size = 0.5, 
+      linetype = 1),
+    legend.position = "bottom"
+  ) +
+  ggplot2::facet_wrap(
+    ~mort
+  ) 
+
+g_df_immi_abs_mort_3 <- g_df_immi_abs %>% 
+  dplyr::filter(mort == "scn_cali_03_mort_3.csv")
+
+g_df_immi_abs_mort_4 <- g_df_immi_abs %>% 
+  dplyr::filter(mort == "scn_cali_03_mort_4.csv")
+
+# rename column
+base::colnames(g_df_immi_abs_mort_4) <- c("sim_id_4", "mort_4", "birds_prop_4", "wind_prop_4", "grand_mean_4", "grand_sd_4")
+
+
+g_df_immi_diff <- cbind(g_df_immi_abs_mort_3, g_df_immi_abs_mort_4)
+
+g_df_immi_diff$mean_diff <- g_df_immi_diff$grand_mean_4 - g_df_immi_diff$grand_mean_immi
+
+p4 <- g_df_immi_diff %>% 
+  ggplot(mapping = aes(
+    x = wind_prop, 
+    y = birds_prop,
+    fill = mean_diff
+  )) +
+  geom_tile() +
+  # geom_text(aes(label = round(mean, 2)), color = "black", size = 4) +
+  # scale_fill_gradient(low="white", high="blue") +
+  # viridis::scale_fill_viridis(discrete = FALSE) +
+   scale_fill_gradient2() +
+  # scale_fill_brewer(palette = "Spectral") +
+  # scale_fill_fermenter() +
+  xlab("proportion of seeds by wind") +
+  ylab("proportion of cones by birds") +
+  # coord_cartesian(xlim = c(0, 20), ylim = c(0, 20)) +
+  scale_shape_manual(
+    name = "Measure",
+    values = c(4, 0)
+  ) +
+  theme_minimal() +
+  # hrbrthemes::theme_ipsum() +
+  # scale_x_continuous(minor_breaks = seq(0, 20, 1)) +
+  # scale_y_continuous(minor_breaks = seq(0, 20, 1)) +
+  theme(
+    text         = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(
+      color = "lightgrey", 
+      size = 0.5, 
+      linetype = 1),
+    legend.position = "bottom"
+  )
+
+
+
+##
+```
+
+```{r}
+#| label: cali-3-plot
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(plyr)
+library(dplyr)
+# library(easycsv)
+library(ggplot2)
+library(cowplot)
+library(hrbrthemes)
+library(viridis)
+
+# load utils
+base::source("utils/pooled_sd.R")
+base::source("utils/read_multiple_files.R")
+
+# input files
+g_path <- "data/sim_outputs/calibration/03_cali"
+g_sim_type <- "*dispersal.csv"
+
+# output figure
+g_figure_name <- "03_cali_dispersal"
+
+# read files and create df
+g_df <- fun_read_files(paste0(g_path, "/raw"), g_sim_type)
+
+g_df$immi <- g_df$bird_immi + g_df$wind_immi
+g_df$lost <- g_df$wind_out + g_df$wind_unsui
+
+# population size in 2006 (8-year-old plants) for each mortality scenario
+g_df <- g_df %>% 
+  dplyr::group_by(sim_id, study_num) %>% 
+  dplyr::summarise(
+    mean_immi = base::mean(immi),
+    mean_lost = base::mean(lost)
+)
+
+g_df <- g_df %>% 
+  dplyr::group_by(sim_id) %>% 
+  dplyr::summarise(
+    grand_mean_immi = base::mean(mean_immi),
+    grand_mean_lost = base::mean(mean_lost)
+  )
+
+# read simulation parameters
+g_files <- base::list.files(
+  path = base::paste0(g_path, "/in/sim"),
+  pattern = "*_simfile.csv",
+  full.names = TRUE
+)
+
+g_params <- plyr::ldply(
+  g_files,
+  utils::read.table,
+  sep = " ",
+  fill = TRUE,
+  header = TRUE
+)
+
+# take the parameter values for plotting
+g_params <- g_params[, c("sim_id", "val1", "val2", "val3")]
+
+# rename column
+base::colnames(g_params) <- c("sim_id", "mort", "birds_prop", "wind_prop")
+
+g_df <- base::merge(x = g_params, y = g_df, by = "sim_id")
+
+
+
+# - % immigration = [4.9%, 7.48%]
+# - # pop ids per population: > 2 and < 4 pop ids per population
+# - distance: mean = [900 m, 1210 m], 
+#             sd = [666 m, 814 m], 
+#             min = [288 m, 352 m], 
+#             max = [2970 m, 3630 m]
+
+
+########################################
+
+cb_palette <- c(
+  # "#999999",
+  "#E69F00",
+  "#56B4E9",
+  "#009E73",
+  "#F0E442",
+  # "#0072B2",
+  # "#D55E00",
+  "#CC79A7"
+)
+
+
+p1 <- g_df %>% 
+  ggplot(mapping = aes(
+    x = wind_prop, 
+    y = birds_prop,
+    fill = grand_mean_immi
+  )) +
+  geom_tile() +
+  # geom_text(aes(label = round(mean, 2)), color = "black", size = 4) +
+  # scale_fill_gradient(low="white", high="blue") +
+  viridis::scale_fill_viridis(discrete = FALSE) +
+  xlab("proportion of seeds by wind") +
+  ylab("proportion of cones by birds") +
+  # coord_cartesian(xlim = c(0, 20), ylim = c(0, 20)) +
+  # scale_shape_manual(
+    # name = "Measure",
+    # values = c(4, 0)
+  # ) +
+  theme_minimal() +
+  # hrbrthemes::theme_ipsum() +
+  # scale_x_continuous(minor_breaks = seq(0, 20, 1)) +
+  # scale_y_continuous(minor_breaks = seq(0, 20, 1)) +
+  theme(
+    text         = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(
+      color = "lightgrey", 
+      size = 0.5, 
+      linetype = 1),
+    legend.position = "bottom"
+  ) +
+  ggplot2::facet_wrap(
+    ~mort
+  )
+
+p2 <- g_df %>% 
+  ggplot(mapping = aes(
+    x = wind_prop, 
+    y = birds_prop,
+    fill = grand_mean_lost
+  )) +
+  geom_tile() +
+  # geom_text(aes(label = round(mean, 2)), color = "black", size = 4) +
+  # scale_fill_gradient(low="white", high="blue") +
+  viridis::scale_fill_viridis(discrete = FALSE) +
+  xlab("proportion of seeds by wind") +
+  ylab("proportion of cones by birds") +
+  # coord_cartesian(xlim = c(0, 20), ylim = c(0, 20)) +
+  # scale_shape_manual(
+    # name = "Measure",
+    # values = c(4, 0)
+  # ) +
+  theme_minimal() +
+  # hrbrthemes::theme_ipsum() +
+  # scale_x_continuous(minor_breaks = seq(0, 20, 1)) +
+  # scale_y_continuous(minor_breaks = seq(0, 20, 1)) +
+  theme(
+    text         = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12),
+    legend.title = element_text(size = 12, face = "bold"),
+    panel.grid.major = element_line(
+      color = "lightgrey", 
+      size = 0.5, 
+      linetype = 1),
+    legend.position = "bottom"
+  ) +
+  ggplot2::facet_wrap(
+    ~mort
+  )
+
+
+# ggplot2::ggsave(
+#   plot = p1,
+#   filename = base::paste0(g_figure_name, ".png"),
+#   path = base::paste0(g_path, "/plots"),
+#   width = 3 * 3,
+#   height = 4,
+#   bg = "white"
+# )
+
+##
+```
+
+# 4. Habitat quality
+
+Calculate the direct proportion of different habitat quality considering
+the mean flower count in Eneabba as the habitat quality with coefficient
+1.
+
+```{r}
+#| label: habitat-quality
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+# library(plyr)
+library(dplyr)
+# library(easycsv)
+library(ggplot2)
+# library(cowplot)
+# library(hrbrthemes)
+# library(viridis)
+
+
+folder_name <- "./data/field/"
+file_name <- "Bankhook_FruityFireDB_09May2019.csv"
+
+df_meta_flr <- utils::read.csv(base::paste0(folder_name, file_name))
+
+# remove rows with NAs in columns "flr"
+df_meta_flr <- dplyr::filter(df_meta_flr, flr != "NA")
+
+graphics::hist(df_meta_flr$flr)
+
+df_meta_flr %>%
+ggplot2::ggplot() +
+  ggplot2::geom_boxplot(aes(x = as.factor(visitYr), y = flr))
+
+# remove the two outliers
+df <- dplyr::filter(df_meta_flr, flr < 150)
+
+df %>%
+ggplot2::ggplot() +
+  ggplot2::geom_boxplot(aes(x = as.factor(visitYr), y = flr))
+
+
+df %>%
+ggplot2::ggplot() +
+  ggplot2::geom_boxplot(aes(x = as.factor(visitYr), y = flr)) +
+  ggplot2::facet_wrap(~plotID)
+
+
+df_2015 <- dplyr::filter(df, visitYr == 2015)
+df_2016 <- dplyr::filter(df, visitYr == 2016)
+df_2017 <- dplyr::filter(df, visitYr == 2017)
+
+
+unique(df_2016$zone)
+
+df_2015 %>% 
+  dplyr::group_by(zone, plotID) %>% 
+  dplyr::summarise(
+    n_indiv = dplyr::n(),
+    time_since_fire = base::max(TSF),
+    elev = base::max(elevation),
+    mean_flr = base::mean(flr),
+    median_flr = stats::median(flr),
+    q3 = stats::quantile(flr, 0.75)
+  )
+
+df_2016 %>% 
+  dplyr::group_by(zone, plotID) %>% 
+  dplyr::summarise(
+    n_indiv = dplyr::n(),
+    time_since_fire = base::max(TSF),
+    elev = base::max(elevation),
+    mean_flr = base::mean(flr),
+    median_flr = stats::median(flr),
+    q3 = stats::quantile(flr, 0.75)
+  )
+
+df_2017 %>% 
+  dplyr::group_by(zone, plotID) %>% 
+  dplyr::summarise(
+    n_indiv = dplyr::n(),
+    time_since_fire = base::max(TSF),
+    elev = base::max(elevation),
+    mean_flr = base::mean(flr),
+    median_flr = stats::median(flr),
+    q3 = stats::quantile(flr, 0.75)
+  )
+
+df_2016_eneabba <- dplyr::filter(
+  df_2016,
+  TSF > 10 & 
+    (zone == "Metapop" | 
+       zone == "MetapopSouth" | 
+       zone == "SouthEneabbaReserve"
+    )
+)
+
+df_2016_eneabba %>% 
+  dplyr::group_by(zone, plotID) %>% 
+  dplyr::summarise(
+    n_indiv = dplyr::n(),
+    time_since_fire = base::max(TSF),
+    elev = base::max(elevation),
+    mean_flr = base::mean(flr),
+    median_flr = stats::median(flr),
+    q3 = stats::quantile(flr, 0.75)
+  )
+
+p1 <- df_2016_eneabba %>%
+  ggplot() +
+  geom_boxplot(aes(x = plotID, y = flr, color = zone), outlier.shape = NA) +
+  geom_jitter(aes(x = plotID, y = flr), size = 1, alpha = 0.5) +
+  scale_color_manual(
+    name = "Location",
+    labels = c("Eneabba", "South Eneabba", "Eneabba Reserve"),
+    values = c("#868686FF", "#0073C2FF", "#EFC000FF")
+    # values = c("#56B4E9", "#E69F00")
+  ) +
+  scale_y_continuous(
+    breaks = base::seq(from = 0, to = 50, by = 10)
+  ) +
+  xlab("Plot ID") +
+  ylab("# of flowers") +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    text = element_text(size = 9, face = "bold"),
+    axis.text = element_text(size = 9),
+    axis.title = element_text(size = 9, face = "bold"),
+    legend.text = element_text(size = 9),
+    legend.title = element_text(size = 9, face = "bold"),
+    strip.text.x = element_blank(),
+    strip.background = element_rect(colour = "white", fill = "white"),
+    legend.position = c(0.75, 0.8)
+  )
+
+p2 <- df_2016_eneabba %>%
+  ggplot() +
+  geom_boxplot(aes(x = as.factor(elevation), y = flr)) +
+  geom_jitter(aes(x = as.factor(elevation), y = flr))
+
+## mean flowers of low habitat quality
+x1 <- mean(df_2016_eneabba$flr[df_2016_eneabba$plotID == "HD1"])
+
+## mean flowers of moderate habitat quality
+x2 <- mean(df_2016_eneabba$flr[df_2016_eneabba$elevation > 60])
+
+## mean flowers of high habitat quality
+x3 <- mean(df_2016_eneabba$flr[df_2016_eneabba$plotID == "MPS1993"])
+
+# calculate the habitat quality coefficients 
+g_coef_moderate <- x2 / x1
+g_coef_high <- x3 / x1
+
+p1
+
+base::print(
+  base::paste0(
+    "'Moderate' habitat quality coefficient is: ", 
+    round(g_coef_moderate, 2)
+  )
+)
+base::print(
+  base::paste0(
+    "'High' habitat quality coefficient is: ",
+    round(g_coef_high, 2)
+  )
+)
+
+ggplot2::ggsave(
+  plot = p1,
+  filename = base::paste0("habitat_quality_small_dpi600.tiff"),
+  path = "./data/plots",
+  width = 3.31,
+  height = 3.31,
+  bg = "white",
+  dpi = 600
+)
+
+```
+
+# 5. Flower count distributions
+
+```{r}
+#| label: load-clean-flower-data
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+# library(easycsv)
+library(ggplot2)
+# library(cowplot)
+# library(hrbrthemes)
+# library(viridis)
+
+# load daily rainfall climate data
+# Eneabba Weather Station no. 8225
+rain <- utils::read.csv(
+  file = "./data/field/IDCJAC0009_8225_1800_Data.csv", 
+  header = TRUE, 
+  sep = ","
+)
+
+flower_current <- utils::read.csv(
+  file = "./data/field/bankhook_Eneabba_flowers_2008_2020.csv", 
+  header = TRUE, 
+  sep = ","
+)
+
+# rename column names from rainfall data
+rain <- rain[c(3, 4, 5, 6)]
+colnames(rain)[1] <- "year"
+colnames(rain)[2] <- "month"
+colnames(rain)[3] <- "day"
+colnames(rain)[4] <- "rainfall"
+
+# tidy rainfall data --------------------------------------
+rain <- rain %>%
+  dplyr::group_by(year, month) %>%
+  dplyr::summarise(rainfall = base::sum(rainfall, na.rm = TRUE))
+
+# winterplus is winter-spring period taking one month before winter (i.e. May)
+# and one month after spring (i.e. December) to get earlier and later rainfalls.
+# This was a?ready used for the baseline flower data in Keith et al., (2014) 
+rain_winterplus <- subset(rain, month > 4)
+
+rain_winterplus <- rain_winterplus %>%
+  dplyr::group_by(year) %>%
+  dplyr::summarise(winterplus_sum = base::sum(rainfall, na.rm = TRUE))
+
+rain_annual <- rain %>%
+  dplyr::group_by(year) %>%
+  dplyr::summarise(annual_sum = base::sum(rainfall, na.rm = TRUE))
+
+rain <- base::merge(
+  x = rain_winterplus,
+  y = rain_annual,
+  by = "year",
+  all.y = TRUE
+)
+
+rain <- base::subset(rain, year < 2017)
+
+base::remove(rain_annual, rain_winterplus)
+
+# I sum up +1 year to the column Year. This makes annual and winterplus to be lag values (i.e., previous year)
+rain_lag <- dplyr::mutate(rain, year = year + 1)
+colnames(rain_lag)[2] <- "lag_winterplus_sum"
+colnames(rain_lag)[3] <- "lag_annual_sum"
+
+rain_lag <- rain_lag %>% 
+  dplyr::mutate(
+    lag2_annual_sum = stats::lag(lag_annual_sum),
+    lag3_annual_sum = stats::lag(lag2_annual_sum),
+    ac_annual_lag12 = lag_annual_sum + lag2_annual_sum,
+    ac_annual_lag23 = lag2_annual_sum + lag3_annual_sum,
+    ac_annual_lag123 = lag_annual_sum + lag2_annual_sum + lag3_annual_sum,
+    lag2_winterplus_sum = stats::lag(lag_winterplus_sum),
+    lag3_winterplus_sum = stats::lag(lag2_winterplus_sum),
+    ac_winterplus_lag12 = lag_winterplus_sum + lag2_winterplus_sum,
+    ac_winterplus_lag23 = lag2_winterplus_sum + lag3_winterplus_sum,
+    ac_winterplus_lag123 = lag_winterplus_sum + lag2_winterplus_sum + 
+      lag3_winterplus_sum
+  ) %>% 
+  stats::na.omit()
+
+rain <- base::merge(
+  x = rain,
+  y = rain_lag,
+  by = "year",
+  all = TRUE
+)
+
+base::remove(rain_lag)
+
+
+# tidy flower data ----------------------------------------
+flower_current_all <- flower_current
+flower_current_all$year_num <- flower_current_all$year
+flower_current_all$year <- base::as.factor(flower_current_all$year) 
+flower_current$year <- base::as.factor(flower_current$year)
+
+flower_current <- flower_current[stats::complete.cases(
+  flower_current[ , "flowers"]), ]
+
+flower_current <- base::merge(
+  x  = flower_current,
+  y  = rain,
+  by = "year"
+)
+
+# # The plants 604, 606, and 608 are outliers. These three plants are "rain on".
+# # This means these plants were watered every month from other study.
+# boxplot(flowers ~ year, data = flower_current,
+#         xlab="Year", ylab="Number of flowers")
+
+
+# # The plants 604, 606, and 608 are outliers. These three plants are "rain on".
+# # This means these plants were watered every month from other study.
+flower_current <- base::subset(
+  flower_current, 
+  tag != 604 & tag != 606 & tag != 608
+)
+
+flower_current$tag <- base::as.factor(flower_current$tag)
+
+flower_current_all <- base::subset(
+  flower_current_all, 
+  tag != 604 & tag != 606 & tag != 608
+)
+
+flower_current_all$tag <- base::as.factor(flower_current_all$tag)
+
+## two plants were recorded for first time already dead
+## they are 893 and 894
+flower_current_all <- flower_current_all %>% 
+  dplyr::filter(!(tag %in% c("893", "894")))
+
+## and three new plants in 2018 did not include the number of flowers
+## they had zero flowers in 2018, thus it should be zero in order to 
+## make the calculations, and avoid NAs and infinite values in later calculations
+## plants 605.18, 606.18, and 614.18
+
+## the plant tag "9771" in HD1 started in 2018 and and in 2019 the 
+## classification status is again "new". I remove the "new" in the input file
+flower_current_all <- flower_current_all %>% 
+  dplyr::mutate(
+    flowers = base::ifelse(
+      status == "" & base::is.na(flowers),
+      0,
+      base::ifelse(
+        status == "new" & base::is.na(flowers),
+        0,
+        flowers
+      )
+    )
+  )
+
+```
+
+```{r}
+#| label: flower-producer-class
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+# library(easycsv)
+library(ggplot2)
+# library(cowplot)
+# library(hrbrthemes)
+# library(viridis)
+
+# load and clean data
+# source("./scripts/clean_data/01_import.R")
+# source("./scripts/clean_data/02_clean_names.R")
+# source("./scripts/clean_data/03_tidy.R")
+
+df_all <- flower_current_all %>% 
+  dplyr::mutate(cones = base::ifelse(
+    status == "new" | status == "prevtagged not in database",
+    flowers + TotFertile,
+    flowers
+  )
+)
+
+# remove DNF rows "not found tags", or "data not found"
+df_all <- dplyr::filter(df_all, status != "DNF")
+
+# only tags from 2008, i.e. initial plants
+df_tags_only_2008 <- flower_current_all %>% 
+  dplyr::filter(flower_current_all$year == 2008)
+
+# cone accumulation per individual (i.e. tag)
+df_all <- df_all %>% 
+  dplyr::group_by(tag) %>% 
+  dplyr::mutate(
+    cum_flowers = base::cumsum(flowers),
+    cum_cones = base::cumsum(cones)
+  )
+
+df_all_2017 <- dplyr::filter(df_all, year_num <= 2017)
+
+# survival per individuals
+## all plants in HD1 all years 2008-2020
+# df_all <- df_all %>% 
+#   dplyr::mutate(
+#     survival = base::ifelse(
+#       status == "",
+#       1,
+#       base::ifelse(
+#         status == "dead", 
+#         (year_num - base::min(year_num)) / 
+#           (base::max(year_num) - base::min(year_num) + 1),
+#         base::ifelse(
+#           status == "new" 
+#           | status == "fallen" 
+#           | status == "prevtagged not in database",
+#           1,
+#           base::ifelse(
+#             status == "dead2019" & year_num == 2019,
+#             (year_num - base::min(year_num)) / 
+#               (base::max(year_num) - base::min(year_num) + 1),
+#             base::ifelse(
+#               status == "dead2020" & year_num == 2020,
+#               (year_num - base::min(year_num)) / 
+#                 (base::max(year_num) - base::min(year_num) + 1),
+#               NA
+#             )
+#           )
+#         )
+#       )
+#     )
+#   )
+
+# survival per individuals
+## all plants in HD1, from 2008 to 2017
+df_all_2017 <- df_all_2017 %>% 
+  dplyr::mutate(survival = base::ifelse(
+    status == "",
+    1,
+    base::ifelse(
+      status == "dead", 
+      (year_num - base::min(year_num)) / 
+        (base::max(year_num) - base::min(year_num) + 1),
+      base::ifelse(
+        status == "new" | status == "fallen",
+        1,
+        NA
+        )
+      )
+    )
+  )
+
+# cumulative flowers only, and cumulative cones and flowers
+# minimum survival in order to get the the survival rate when the plant died
+
+## all plants, from 2008 to 2017
+df_summ_all_2017 <- df_all_2017 %>% 
+  dplyr::group_by(tag) %>% 
+  dplyr::summarise(
+    tag_cum_flowers = base::max(cum_flowers, na.rm = TRUE),
+    tag_cum_cones = base::max(cum_cones, na.rm = TRUE),
+    tag_height = base::max(hgt, na.rm = TRUE),
+    tag_survival = base::min(survival, na.rm = TRUE)
+  )
+
+# quantile classification
+df_q_all_2017 <- df_summ_all_2017 %>%
+  dplyr::summarise(
+    cones_q3 = stats::quantile(tag_cum_cones, prob = 0.75),
+    cones_q1 = stats::quantile(tag_cum_cones, prob = 0.25),
+    flowers_q3 = stats::quantile(tag_cum_flowers, prob = 0.75),
+    flowers_q1 = stats::quantile(tag_cum_flowers, prob = 0.25)
+  )
+
+df_summ_all_2017 <- df_summ_all_2017 %>% 
+  dplyr::mutate(
+    q_class_cones = base::ifelse(
+      tag_cum_cones > df_q_all_2017$cones_q3,
+      3,
+      base::ifelse(
+        tag_cum_cones < df_q_all_2017$cones_q1,
+        1,
+        2
+      )
+    )
+  ) %>% 
+  dplyr::mutate(
+    q_class_flowers = base::ifelse(
+      tag_cum_flowers > df_q_all_2017$flowers_q3,
+      3,
+      base::ifelse(
+        tag_cum_flowers < df_q_all_2017$flowers_q1,
+        1,
+        2
+      )
+    )
+  )
+
+# quantile classification
+df_summ_all_2017 <- df_summ_all_2017 %>% 
+  dplyr::mutate(
+    q75_class_cones = base::ifelse(
+      tag_cum_cones < df_q_all_2017$cones_q3,
+      0,
+      1
+    )
+  )
+
+# plots with quantile classification
+df_summ_all_2017 %>%
+  dplyr::group_by(q_class_cones) %>%
+  dplyr::summarise(
+    total_cases = dplyr::n(),
+    mean_survival = base::mean(tag_survival)
+  )
+
+# plot
+p1 <- df_summ_all_2017 %>% 
+  ggplot2::ggplot(
+    mapping = ggplot2::aes(x = tag_cum_cones, y = tag_survival)
+  ) +
+  ggplot2::geom_point(
+    ggplot2::aes(color = base::as.factor(q75_class_cones)), 
+    size = 2,
+    alpha = 0.5
+  ) +
+  # ggrepel::geom_text_repel(
+  #   mapping = ggplot2::aes(label = tag)
+  # ) +
+  ggplot2::coord_cartesian(ylim = c(0, 1)) +
+  ggplot2::ggtitle("(a)") +
+  ggplot2::xlab("Total cones (#)") +
+  ggplot2::ylab("Survival rate") +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    text         = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14, face = "bold"),
+    legend.position = c(0.75, 0.3)
+    # legend.key.size = unit(1, "cm"),
+    # legend.text  = element_text(size = 24, face = "plain"),
+    # legend.title = element_text(size = 24, face = "bold")
+  ) +
+  # ggplot2::scale_color_manual(
+  #   name = "Percentile class:",
+  #   values = c("#0073C2FF", "#EFC000FF"),
+  #   labels = c(base::expression("" < 0.75), base::expression("" >= 0.75))
+  # )
+    ggplot2::scale_color_manual(
+    name = "Flower producer class:",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("poor", "good")
+  )
+
+
+
+# ggplot2::ggsave(
+#   plot = p1,
+#   filename = base::paste0(g_figure_name, ".png"),
+#   path = base::paste0(g_path, "/plots"),
+#   width = 7,
+#   height = 4,
+#   bg = "white"
+# )
+
+##
+```
+
+```{r}
+#| label: flower-producer-class-2
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+library(ggplot2)
+
+flower_current_all_rain <- flower_current_all[
+  stats::complete.cases(flower_current_all[ , "flowers"]), 
+]
+
+flower_current_all_rain <- base::merge(
+  x  = flower_current_all_rain,
+  y  = rain,
+  by = "year"
+)
+
+flower_current_q_all_2017 <- base::merge(
+  x = flower_current_all_rain, 
+  y = df_summ_all_2017,
+  by = "tag")
+
+
+p2 <- flower_current_q_all_2017 %>% 
+  ggplot(aes(x = year, y = flowers)) +
+  geom_jitter(
+    aes(color = as.factor(q75_class_cones)), width = 0.1, size = 2, alpha = 0.5
+  ) +
+  ggplot2::ggtitle("(b)") +
+  ggplot2::xlab("Year") +
+  ggplot2::ylab("Flowers (#)") +
+  scale_x_discrete(labels = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)) +
+  # ggplot2::theme_minimal() +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    text         = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14, face = "bold"),
+  ) +
+  # ggplot2::scale_color_manual(
+  #   name = "Percentile class:",
+  #   values = c("#0073C2FF", "#EFC000FF"),
+  #   labels = c(base::expression("" < 0.75), base::expression("" >= 0.75))
+  # )
+    ggplot2::scale_color_manual(
+    name = "Flower producer class:",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("poor", "good")
+  )
+
+
+
+```
+
+```{r}
+#| label: flower-data-boxplot
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+library(ggsignif)
+library(ggplot2)
+p3 <- ggplot(data = df_summ_all_2017,
+       aes(x = as.factor(q75_class_cones),
+           y = tag_cum_cones,
+           fill = as.factor(q75_class_cones))) +
+  geom_boxplot(
+    alpha = 0.6,
+    outlier.shape = 1,
+    notch = TRUE,
+    notchwidth = 0.5
+  ) +
+  #  geom_jitter(
+  #   width = 0.2,
+  #   size = 1,
+  #   alpha = 0.7,
+  #   shape = 21,
+  #   color = "black",
+  #   fill = "black"
+  # ) + 
+  scale_fill_manual(values = c("#0073C2FF", "#EFC000FF")) +
+  guides(fill = FALSE) +
+  theme_classic() +
+  ggtitle("(c)") +
+  xlab("Flower producers class") +
+  ylab("Total cones (#)") +
+  scale_x_discrete(labels = c("poor", "good")) +
+  theme(text = element_text(size = 14, face = "bold"),
+        axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 14, face = "bold"),
+        legend.text  = element_text(size = 14),
+        legend.title = element_text(size = 14, face = "bold")) +
+  ggsignif::geom_signif(test = "wilcox.test", comparisons = list(c(1, 2)), 
+              map_signif_level = TRUE, y_position = 92)
+
+
+p4 <- ggplot(data = df_summ_all_2017,
+       aes(x = as.factor(q75_class_cones),
+           y = tag_survival,
+           fill = as.factor(q75_class_cones))) +
+  geom_boxplot(
+    alpha = 0.6,
+    outlier.shape = 1,
+    notch = TRUE,
+    notchwidth = 0.5
+  ) +
+  #  geom_jitter(
+  #   width = 0.2,
+  #   size = 1,
+  #   alpha = 0.7,
+  #   shape = 21,
+  #   color = "black",
+  #   fill = "black"
+  # ) + 
+  scale_fill_manual(values = c("#0073C2FF", "#EFC000FF")) +
+  guides(fill = FALSE) +
+  theme_classic() +
+  ggtitle("(d)") +
+  xlab("Flower producers class") +
+  ylab("Survival rate") +
+  scale_x_discrete(labels = c("poor", "good")) +
+  ggplot2::scale_y_continuous(
+    breaks = base::seq(from = 0, to = 1, by = 0.25)
+  ) +
+  coord_cartesian(ylim = c(0, 1.1)) +
+  theme(text = element_text(size = 14, face = "bold"),
+        axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 14, face = "bold"),
+        legend.text  = element_text(size = 14),
+        legend.title = element_text(size = 14, face = "bold")) +
+  ggsignif::geom_signif(test = "wilcox.test", comparisons = list(c(1, 2)), 
+              map_signif_level = TRUE, y_position = 1.05)
+```
+
+```{r}
+#| label: flower-data-plot
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+library(ggpubr)
+
+parr1 <- ggpubr::ggarrange(p1, p2, ncol = 2, common.legend = TRUE, legend = "bottom")
+parr2 <- ggpubr::ggarrange(p3, p4, ncol = 2, common.legend = TRUE, legend = "bottom")
+parr3 <- ggpubr::ggarrange(parr1, parr2, ncol = 1)
+
+# save figure
+ggplot2::ggsave(
+  plot = parr3,
+  filename = base::paste0("flower_producers_NEW_dpi300", ".tiff"),
+  path = "./data/plots/",
+  width = 3.31 * 2,
+  height = 3.31 * 2,
+  bg = "white",
+  dpi = 300
+)
+
+```
+
+```{r}
+#| label: flower-data-glm-fit
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# libraries
+library(rstatix)
+
+# Testing normality: both datasets are significant, thus they are non-normal distributed.
+stats::shapiro.test(flower_current_q_all_2017$flowers)
+stats::shapiro.test(flower_current_q_all_2017$tag_cum_cones)
+stats::shapiro.test(flower_current_q_all_2017$tag_survival)
+
+# points are not along the reference line in que qqplot
+car::qqPlot(flower_current_q_all_2017$flowers)
+car::qqPlot(flower_current_q_all_2017$tag_cum_cones)
+
+res1 <- stats::wilcox.test(
+  tag_cum_cones ~ q75_class_cones, 
+  data = flower_current_q_all_2017,
+  exact = FALSE
+)
+
+res2 <- stats::wilcox.test(
+  tag_survival ~ q75_class_cones, 
+  data = flower_current_q_all_2017,
+  exact = FALSE
+)
+
+stat_test1 <- flower_current_q_all_2017 %>% 
+  rstatix::wilcox_test(tag_cum_cones ~ q75_class_cones) %>% 
+  rstatix::add_significance()
+
+stat_test2 <- flower_current_q_all_2017 %>% 
+  rstatix::wilcox_test(tag_survival ~ q75_class_cones) %>% 
+  rstatix::add_significance()
+
+stats::IQR(flower_current_q_all_2017$tag_cum_cones)
+stats::IQR(flower_current_q_all_2017$tag_survival)
+
+# generalize linear regression with the binomial family
+# shows the predictor variable year as non significant, thus,
+# we can assume that the higher the flower production the higher the survival
+# probability it is with year being not significant in the binary classification
+# year variable does not influence in the binary calssification of lower and 
+# higher flower producers 
+fit_glm <- stats::glm(
+  q75_class_cones ~ flowers + year_num,
+  family = binomial,
+  data = flower_current_q_all_2017
+)
+
+summary(fit_glm)
+```
+
+## 5.1 Fuzzification
+
+```{r}
+#| label: fuzzification
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+library(ggplot2)
+library(dplyr)
+
+p1 <- flower_current_q_all_2017 %>% 
+  ggplot(aes(x = ac_winterplus_lag123, y = flowers)) +
+  geom_jitter(
+    aes(color = as.factor(q75_class_cones)), width = 0.2, size = 2, alpha = 0.5
+  ) +
+  ggplot2::ggtitle("(a)") +
+  ggplot2::xlab("Sum winter\u2013spring rainfall\n of the last three years (mm)") +
+  ggplot2::ylab("Flowers (#)") +
+  # ggplot2::theme_minimal() +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    text         = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14, face = "bold"),
+  ) +
+  # ggplot2::scale_color_manual(
+  #   name = "Percentile class:",
+  #   values = c("#0073C2FF", "#EFC000FF"),
+  #   labels = c(base::expression("" < 0.75), base::expression("" >= 0.75))
+  # )
+  ggplot2::scale_color_manual(
+    name = "Flower producer",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  )
+
+# classify fuzzy sets
+# >=1134.9 mm
+flower_current_q_all_2017 <- flower_current_q_all_2017 %>% 
+  dplyr::mutate(fuzzy = base::ifelse(ac_winterplus_lag123 >= 1134.9, 1, 0))
+
+p2 <- flower_current_q_all_2017 %>%
+  dplyr::filter(fuzzy == 0) %>% 
+  ggplot(aes(x = lag_annual_sum, y = flowers)) +
+  geom_jitter(
+    aes(color = as.factor(q75_class_cones)), width = 0.2, size = 2, alpha = 0.5
+  ) +
+  ggplot2::ggtitle("(b)") +
+  ggplot2::xlab("Lag annual rainfall (mm)") +
+  ggplot2::ylab("Flowers (#)") +
+  # ggplot2::theme_minimal() +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    text         = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14, face = "bold"),
+  ) +
+  # ggplot2::scale_color_manual(
+  #   name = "Percentile class:",
+  #   values = c("#0073C2FF", "#EFC000FF"),
+  #   labels = c(base::expression("" < 0.75), base::expression("" >= 0.75))
+  # )
+  ggplot2::scale_color_manual(
+    name = "Flower producer",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  )
+
+p3 <- flower_current_q_all_2017 %>%
+  dplyr::filter(fuzzy == 1) %>% 
+  ggplot(aes(x = lag_annual_sum, y = flowers)) +
+  geom_jitter(
+    aes(color = as.factor(q75_class_cones)), width = 0.2, size = 2, alpha = 0.5
+  ) +
+  ggplot2::ggtitle("(c)") +
+  ggplot2::xlab("Lag annual rainfall (mm)") +
+  ggplot2::ylab("Flowers (#)") +
+  # ggplot2::theme_minimal() +
+  ggplot2::theme_classic() +
+  ggplot2::theme(
+    text         = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14, face = "bold"),
+  ) +
+  # ggplot2::scale_color_manual(
+  #   name = "Percentile class:",
+  #   values = c("#0073C2FF", "#EFC000FF"),
+  #   labels = c(base::expression("" < 0.75), base::expression("" >= 0.75))
+  # )
+  ggplot2::scale_color_manual(
+    name = "Flower producers",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  )
+
+
+parr <- ggpubr::ggarrange(
+  p1, p2, p3,
+  nrow = 3, 
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+# save figure
+# ggplot2::ggsave(
+#   plot = parr,
+#   filename = base::paste0("fuzzification_small", ".png"),
+#   path = "./data/plots/",
+#   width = 3.31,
+#   height = 3.31 * 3,
+#   bg = "white"
+# )
+
+```
+
+```{r}
+#| label: fuzzification-plot
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+
+p1f <- flower_current_q_all_2017 %>% 
+  ggplot(aes(x = ac_winterplus_lag123, y = flowers)) +
+    ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 1134.9, 
+      linetype = "crisp values"), 
+    colour = "black") +
+      ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 1101.6, 
+      linetype = "crisp values"), 
+    colour = "black") +
+  geom_jitter(
+    aes(color = as.factor(q75_class_cones)), width = 0.3, size = 3, alpha = 0.5
+  ) +
+    scale_y_continuous(
+    "Flowers (#)", 
+    sec.axis = sec_axis(~ . /22, name = "Proportion")
+  ) +
+  ggplot2::ggtitle("(a)") +
+  ggplot2::xlab("Sum winter\u2013spring rainfall of the last three years (mm)") +
+  ggplot2::ylab("Flowers (#)") +
+  # ggplot2::theme_minimal() +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    text         = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14, face = "bold"),
+  ) +
+  # ggplot2::scale_color_manual(
+  #   name = "Percentile class:",
+  #   values = c("#0073C2FF", "#EFC000FF"),
+  #   labels = c(base::expression("" < 0.75), base::expression("" >= 0.75))
+  # )
+  ggplot2::scale_color_manual(
+    name = "Flower producer:",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("poor", "good")
+  ) +
+  ggplot2::scale_linetype_manual(name = "", values = c("dashed")) 
+
+# classify fuzzy sets
+# >=1134.9 mm
+flower_current_q_all_2017 <- flower_current_q_all_2017 %>% 
+  dplyr::mutate(fuzzy = base::ifelse(ac_winterplus_lag123 >= 1134.9, 1, 0))
+
+p2f <- flower_current_q_all_2017 %>%
+  dplyr::filter(fuzzy == 0) %>% 
+  ggplot(aes(x = lag_annual_sum, y = flowers)) +
+  ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 341.5, 
+      linetype = "crisp values"), 
+    colour = "black") +
+  ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 369.3, 
+      linetype = "crisp values"), 
+    colour = "black") +
+  ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 480.3, 
+      linetype = "crisp values"), 
+    colour = "black") +
+  geom_jitter(
+    aes(color = as.factor(q75_class_cones)), width = 0.3, size = 3, alpha = 0.5
+  ) +
+  # ggplot2::xlim(c(340, 500)) +
+  scale_y_continuous(
+    "Flowers (#)", 
+    sec.axis = sec_axis(~ . / 7, name = "Proportion")
+  ) +
+  ggplot2::scale_x_continuous(breaks = base::seq(325, 525, 50)) +
+  ggplot2::ggtitle("(b)") +
+  ggplot2::xlab("Lag annual rainfall (mm)") +
+  ggplot2::ylab("Flowers (#)") +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    text         = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14, face = "bold"),
+  ) +
+  ggplot2::scale_color_manual(
+    name = "Flower producer:",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("poor", "good") 
+  ) +
+  ggplot2::scale_linetype_manual(name = "", values = c("dashed")) +
+  ggplot2::coord_cartesian(xlim = c(325, 525))
+
+p3f <- flower_current_q_all_2017 %>%
+  dplyr::filter(fuzzy == 1) %>% 
+  ggplot(aes(x = lag_annual_sum, y = flowers)) +
+  ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 412.8, 
+      linetype = "crisp values"), 
+    colour = "black") +
+  ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 458.3, 
+      linetype = "crisp values"), 
+    colour = "black") +
+  ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 492.7, 
+      linetype = "crisp values"), 
+    colour = "black") +
+  ggplot2::geom_vline(
+    mapping = aes(
+      xintercept = 518.3, 
+      linetype = "crisp values"), 
+    colour = "black") +
+  geom_jitter(
+    aes(color = as.factor(q75_class_cones)), width = 0.3, size = 3, alpha = 0.5
+  ) +
+  scale_y_continuous(
+    "Flowers (#)", 
+    sec.axis = sec_axis(~ . /22, name = "Proportion")
+  ) +
+  ggplot2::scale_x_continuous(breaks = base::seq(325, 525, 50)) +
+  # ggplot2::xlim(c(385, 530)) +
+  ggplot2::ggtitle("(c)") +
+  ggplot2::xlab("Lag annual rainfall (mm)") +
+  ggplot2::ylab("Flowers (#)") +
+  # ggplot2::theme_minimal() +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    text         = element_text(size = 14, face = "bold"),
+    axis.text    = element_text(size = 14),
+    axis.title   = element_text(size = 14, face = "bold"),
+    legend.text  = element_text(size = 14),
+    legend.title = element_text(size = 14, face = "bold"),
+  ) +
+  # ggplot2::scale_color_manual(
+  #   name = "Percentile class:",
+  #   values = c("#0073C2FF", "#EFC000FF"),
+  #   labels = c(base::expression("" < 0.75), base::expression("" >= 0.75))
+  # )
+  ggplot2::scale_color_manual(
+    name = "Flower producer:",
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("poor", "good")
+  ) +
+  ggplot2::scale_linetype_manual(name = "", values = c("dashed")) +
+  ggplot2::coord_cartesian(xlim = c(375, 525))
+
+
+parr <- ggpubr::ggarrange(
+  p1f, p2f, p3f,
+  nrow = 3, 
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+# save figure
+ggplot2::ggsave(
+  plot = parr,
+  filename = base::paste0("fuzzification_all_dpi300", ".tiff"),
+  path = "./data/plots/",
+  width = 3.31 * 2,
+  height = 3.31 * 3,
+  bg = "white",
+  dpi = 300
+)
+
+```
+
+```{r}
+#| label: fuzzification-plot-fuzzyr
+#| include: false
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# library(FuzzyR)
+# 
+# g_fis <- FuzzyR::newfis("tipper")
+# g_fis <- FuzzyR::addvar(
+#   fis = g_fis, 
+#   varType = "input", 
+#   varName = "rainfall", 
+#   varBounds = 300:550
+# )
+# 
+# g_fis <- FuzzyR::addmf(g_fis, "input", 1, "poor", "trapmf", c(300, 350, 400, 450))
+# g_fis <- FuzzyR::addmf(g_fis, "input", 1, "good", "trapmf", c(400, 450, 500, 550))
+# 
+# class(g_fis)
+# 
+# FuzzyR::plotmf(g_fis, "input", 1)
+# 
+# plotmf(
+# g_fis,
+# "input",
+# 1,
+# xx = 0,
+# timelimit = 0,
+# xlab = "hey",
+# ylab = NULL,
+# main = NULL
+# )
+```
+
+## 5.2 Fit flower count distributions
+
+### 5.1.1 fs 0, mf 0
+
+Null, no flowers in membership function zero for both plant types
+
+```{r}
+#| label: fs0-mf0
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 0, membership function = 0, plant type  = 0
+
+# below 341.5 mm
+df_dist_fs0_mf0 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 0 & lag_annual_sum == 341.5
+  )
+
+# no flowers in this membership function
+base::max(df_dist_fs0_mf0$flowers)
+
+```
+
+### 5.1.2 fs 0, mf 1
+
+```{r}
+#| label: fs0-mf1-pt0
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 0, membership function = 1, plant type  = 0
+# df_dist <- df_dist %>% 
+#   dplyr::mutate(
+#     class_lag123 = base::ifelse(
+#       ac_winterplus_lag123 > 1134,
+#       1,
+#       0
+#     )
+#   )
+
+# lag_annual_sum = 369.3 mm
+df_dist_fs0_mf1 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 0 & lag_annual_sum == 369.3
+    )
+
+fs0_mf1_pt0_p <- fitdistrplus::fitdist(
+  df_dist_fs0_mf1$flowers[df_dist_fs0_mf1$q75_class_cones == 0],
+  "pois"
+)
+
+fs0_mf1_pt0_nb <- fitdistrplus::fitdist(
+  df_dist_fs0_mf1$flowers[df_dist_fs0_mf1$q75_class_cones == 0],
+  "nbinom"
+)
+
+fs0_mf1_pt0_g <- fitdistrplus::fitdist(
+  df_dist_fs0_mf1$flowers[df_dist_fs0_mf1$q75_class_cones == 0],
+  "geom"
+)
+
+plot(fs0_mf1_pt0_p)
+plot(fs0_mf1_pt0_nb)
+plot(fs0_mf1_pt0_g)
+
+summary(fs0_mf1_pt0_p)
+summary(fs0_mf1_pt0_nb)
+summary(fs0_mf1_pt0_g)
+
+# get aic values for each distribution
+fs0_mf1_pt0_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs0_mf1_pt0_p$aic
+)
+fs0_mf1_pt0_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs0_mf1_pt0_nb$aic
+)
+fs0_mf1_pt0_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs0_mf1_pt0_g$aic
+)
+
+
+g_aic <- base::rbind(
+  fs0_mf1_pt0_p_aic, 
+  fs0_mf1_pt0_nb_aic, 
+  fs0_mf1_pt0_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+```{r}
+#| label: fs0-mf1-pt1
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 0, membership function = 1, plant type  = 1
+df_dist_fs0_mf1 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 0 & lag_annual_sum == 369.3
+    )
+
+fs0_mf1_pt1_p <- fitdistrplus::fitdist(
+  df_dist_fs0_mf1$flowers[df_dist_fs0_mf1$q75_class_cones == 1],
+  "pois"
+)
+
+fs0_mf1_pt1_nb <- fitdistrplus::fitdist(
+  df_dist_fs0_mf1$flowers[df_dist_fs0_mf1$q75_class_cones == 1],
+  "nbinom"
+)
+
+fs0_mf1_pt1_g <- fitdistrplus::fitdist(
+  df_dist_fs0_mf1$flowers[df_dist_fs0_mf1$q75_class_cones == 1],
+  "geom"
+)
+
+plot(fs0_mf1_pt1_p)
+plot(fs0_mf1_pt1_nb)
+plot(fs0_mf1_pt1_g)
+
+summary(fs0_mf1_pt1_p)
+summary(fs0_mf1_pt1_nb)
+summary(fs0_mf1_pt1_g)
+
+# get aic values for each distribution
+fs0_mf1_pt1_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs0_mf1_pt1_p$aic
+)
+fs0_mf1_pt1_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs0_mf1_pt1_nb$aic
+)
+fs0_mf1_pt1_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs0_mf1_pt1_g$aic
+)
+
+g_aic <- base::rbind(
+  fs0_mf1_pt1_p_aic, 
+  fs0_mf1_pt1_nb_aic, 
+  fs0_mf1_pt1_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+### 5.1.3 fs 0, mf 2
+
+```{r}
+#| label: fs0-mf2-pt0
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 0, membership function = 2, plant type  = 0
+# df_dist <- df_dist %>% 
+#   dplyr::mutate(
+#     class_lag123 = base::ifelse(
+#       ac_winterplus_lag123 >= 1134.9,
+#       1,
+#       0
+#     )
+#   )
+
+# lag_annual_sum >=480.3 mm
+df_dist_fs0_mf2 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 0 & lag_annual_sum >= 480.3
+  )
+
+fs0_mf2_pt0_p <- fitdistrplus::fitdist(
+  df_dist_fs0_mf2$flowers[df_dist_fs0_mf2$q75_class_cones == 0],
+  "pois"
+)
+
+fs0_mf2_pt0_nb <- fitdistrplus::fitdist(
+  df_dist_fs0_mf2$flowers[df_dist_fs0_mf2$q75_class_cones == 0],
+  "nbinom"
+)
+
+fs0_mf2_pt0_g <- fitdistrplus::fitdist(
+  df_dist_fs0_mf2$flowers[df_dist_fs0_mf2$q75_class_cones == 0],
+  "geom"
+)
+
+plot(fs0_mf2_pt0_p)
+plot(fs0_mf2_pt0_nb)
+plot(fs0_mf2_pt0_g)
+
+summary(fs0_mf2_pt0_p)
+summary(fs0_mf2_pt0_nb)
+summary(fs0_mf2_pt0_g)
+
+# get aic values for each distribution
+fs0_mf2_pt0_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs0_mf2_pt0_p$aic
+)
+fs0_mf2_pt0_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs0_mf2_pt0_nb$aic
+)
+fs0_mf2_pt0_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs0_mf2_pt0_g$aic
+)
+
+g_aic <- base::rbind(
+  fs0_mf2_pt0_p_aic, 
+  fs0_mf2_pt0_nb_aic, 
+  fs0_mf2_pt0_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+```{r}
+#| label: fs0-mf2-pt1
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 0, membership function = 2, plant type  = 1
+
+# lag_annual_sum >480.3 mm
+df_dist_fs0_mf2 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 0 & lag_annual_sum >= 480
+  )
+
+
+fs0_mf2_pt1_p <- fitdistrplus::fitdist(
+  df_dist_fs0_mf2$flowers[df_dist_fs0_mf2$q75_class_cones == 1],
+  "pois"
+)
+
+fs0_mf2_pt1_nb <- fitdistrplus::fitdist(
+  df_dist_fs0_mf2$flowers[df_dist_fs0_mf2$q75_class_cones == 1],
+  "nbinom"
+)
+
+fs0_mf2_pt1_g <- fitdistrplus::fitdist(
+  df_dist_fs0_mf2$flowers[df_dist_fs0_mf2$q75_class_cones == 1],
+  "geom"
+)
+
+plot(fs0_mf2_pt1_p)
+plot(fs0_mf2_pt1_nb)
+plot(fs0_mf2_pt1_g)
+
+summary(fs0_mf2_pt1_p)
+summary(fs0_mf2_pt1_nb)
+summary(fs0_mf2_pt1_g)
+
+# get aic values for each distribution
+fs0_mf2_pt1_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs0_mf2_pt1_p$aic
+)
+fs0_mf2_pt1_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs0_mf2_pt1_nb$aic
+)
+fs0_mf2_pt1_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs0_mf2_pt1_g$aic
+)
+
+g_aic <- base::rbind(
+  fs0_mf2_pt1_p_aic, 
+  fs0_mf2_pt1_nb_aic, 
+  fs0_mf2_pt1_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+### 5.1.4 fs 1, mf 0
+
+```{r}
+#| label: fs1-mf0-pt0
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 1, membership function = 0, plant type  = 0
+df_dist_fs1_mf0 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1 & lag_annual_sum <= 412.8
+  )
+
+df_dist_fs1_mf0_box <- ggplot(data = df_dist_fs1_mf0) +
+  geom_boxplot(aes(x = as.factor(lag_annual_sum), y = flowers))
+    
+# fuzzy set = 1, membership function = 0, plant type  = 0
+test <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1)
+
+fs1_mf0_pt0_p <- fitdistrplus::fitdist(
+  df_dist_fs1_mf0$flowers[df_dist_fs1_mf0$q75_class_cones == 0],
+  "pois"
+)
+
+fs1_mf0_pt0_nb <- fitdistrplus::fitdist(
+  df_dist_fs1_mf0$flowers[df_dist_fs1_mf0$q75_class_cones == 0],
+  "nbinom"
+)
+
+fs1_mf0_pt0_g <- fitdistrplus::fitdist(
+  df_dist_fs1_mf0$flowers[df_dist_fs1_mf0$q75_class_cones == 0],
+  "geom"
+)
+
+plot(fs1_mf0_pt0_p)
+plot(fs1_mf0_pt0_nb)
+plot(fs1_mf0_pt0_g)
+
+summary(fs1_mf0_pt0_p)
+summary(fs1_mf0_pt0_nb)
+summary(fs1_mf0_pt0_g)
+
+# get aic values for each distribution
+fs1_mf0_pt0_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs1_mf0_pt0_p$aic
+)
+fs1_mf0_pt0_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs1_mf0_pt0_nb$aic
+)
+fs1_mf0_pt0_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs1_mf0_pt0_g$aic
+)
+
+g_aic <- base::rbind(
+  fs1_mf0_pt0_p_aic, 
+  fs1_mf0_pt0_nb_aic, 
+  fs1_mf0_pt0_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+```{r}
+#| label: fs1-mf0-pt1
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 1, membership function = 0, plant type = 1
+df_dist_fs1_mf0 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1 & lag_annual_sum <= 412.8
+  )
+
+fs1_mf0_pt1_p <- fitdistrplus::fitdist(
+  df_dist_fs1_mf0$flowers[df_dist_fs1_mf0$q75_class_cones == 1],
+  "pois"
+)
+
+fs1_mf0_pt1_nb <- fitdistrplus::fitdist(
+  df_dist_fs1_mf0$flowers[df_dist_fs1_mf0$q75_class_cones == 1],
+  "nbinom"
+)
+
+fs1_mf0_pt1_g <- fitdistrplus::fitdist(
+  df_dist_fs1_mf0$flowers[df_dist_fs1_mf0$q75_class_cones == 1],
+  "geom"
+)
+
+plot(fs1_mf0_pt1_p)
+plot(fs1_mf0_pt1_nb)
+plot(fs1_mf0_pt1_g)
+
+summary(fs1_mf0_pt1_p)
+summary(fs1_mf0_pt1_nb)
+summary(fs1_mf0_pt1_g)
+
+# get aic values for each distribution
+fs1_mf0_pt1_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs1_mf0_pt1_p$aic
+)
+fs1_mf0_pt1_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs1_mf0_pt1_nb$aic
+)
+fs1_mf0_pt1_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs1_mf0_pt1_g$aic
+)
+
+g_aic <- base::rbind(
+  fs1_mf0_pt1_p_aic, 
+  fs1_mf0_pt1_nb_aic, 
+  fs1_mf0_pt1_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+### 5.1.5 fs 1, mf 1
+
+```{r}
+#| label: fs1-mf1-pt0
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 1, membership function = 1, plant type  = 0
+df_dist_fs1_mf1 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1 & lag_annual_sum == 458.3
+  )
+
+fs1_mf1_pt0_p <- fitdistrplus::fitdist(
+  df_dist_fs1_mf1$flowers[df_dist_fs1_mf1$q75_class_cones == 0],
+  "pois"
+)
+
+fs1_mf1_pt0_nb <- fitdistrplus::fitdist(
+  df_dist_fs1_mf1$flowers[df_dist_fs1_mf1$q75_class_cones == 0],
+  "nbinom"
+)
+
+fs1_mf1_pt0_g <- fitdistrplus::fitdist(
+  df_dist_fs1_mf1$flowers[df_dist_fs1_mf1$q75_class_cones == 0],
+  "geom"
+)
+
+plot(fs1_mf1_pt0_p)
+plot(fs1_mf1_pt0_nb)
+plot(fs1_mf1_pt0_g)
+
+summary(fs1_mf1_pt0_p)
+summary(fs1_mf1_pt0_nb)
+summary(fs1_mf1_pt0_g)
+
+# get aic values for each distribution
+fs1_mf1_pt0_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs1_mf1_pt0_p$aic
+)
+fs1_mf1_pt0_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs1_mf1_pt0_nb$aic
+)
+fs1_mf1_pt0_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs1_mf1_pt0_g$aic
+)
+
+g_aic <- base::rbind(
+  fs1_mf1_pt0_p_aic, 
+  fs1_mf1_pt0_nb_aic, 
+  fs1_mf1_pt0_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+```{r}
+#| label: fs1-mf1-pt1
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 1, membership function = 1, plant type  = 1
+df_dist_fs1_mf1 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1 & lag_annual_sum == 458.3
+  )
+
+fs1_mf1_pt1_p <- fitdistrplus::fitdist(
+  df_dist_fs1_mf1$flowers[df_dist_fs1_mf1$q75_class_cones == 1],
+  "pois"
+)
+
+fs1_mf1_pt1_nb <- fitdistrplus::fitdist(
+  df_dist_fs1_mf1$flowers[df_dist_fs1_mf1$q75_class_cones == 1],
+  "nbinom"
+)
+
+fs1_mf1_pt1_g <- fitdistrplus::fitdist(
+  df_dist_fs1_mf1$flowers[df_dist_fs1_mf1$q75_class_cones == 1],
+  "geom"
+)
+
+plot(fs1_mf1_pt1_p)
+plot(fs1_mf1_pt1_nb)
+plot(fs1_mf1_pt1_g)
+
+summary(fs1_mf1_pt1_p)
+summary(fs1_mf1_pt1_nb)
+summary(fs1_mf1_pt1_g)
+
+# get aic values for each distribution
+fs1_mf1_pt1_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs1_mf1_pt1_p$aic
+)
+fs1_mf1_pt1_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs1_mf1_pt1_nb$aic
+)
+fs1_mf1_pt1_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs1_mf1_pt1_g$aic
+)
+
+g_aic <- base::rbind(
+  fs1_mf1_pt1_p_aic, 
+  fs1_mf1_pt1_nb_aic, 
+  fs1_mf1_pt1_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+### 5.1.6 fs 1, mf 2
+
+```{r}
+#| label: fs1-mf2-pt0
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 1, membership function = 2, plant type  = 0
+df_dist_fs1_mf2 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1 & lag_annual_sum == 492.7
+)
+
+fs1_mf2_pt0_p <- fitdistrplus::fitdist(
+  df_dist_fs1_mf2$flowers[df_dist_fs1_mf2$q75_class_cones == 0],
+  "pois"
+)
+
+fs1_mf2_pt0_nb <- fitdistrplus::fitdist(
+  df_dist_fs1_mf2$flowers[df_dist_fs1_mf2$q75_class_cones == 0],
+  "nbinom"
+)
+
+fs1_mf2_pt0_g <- fitdistrplus::fitdist(
+  df_dist_fs1_mf2$flowers[df_dist_fs1_mf2$q75_class_cones == 0],
+  "geom"
+)
+
+plot(fs1_mf2_pt0_p)
+plot(fs1_mf2_pt0_nb)
+plot(fs1_mf2_pt0_g)
+
+summary(fs1_mf2_pt0_p)
+summary(fs1_mf2_pt0_nb)
+summary(fs1_mf2_pt0_g)
+
+# get aic values for each distribution
+fs1_mf2_pt0_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs1_mf2_pt0_p$aic
+)
+fs1_mf2_pt0_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs1_mf2_pt0_nb$aic
+)
+fs1_mf2_pt0_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs1_mf2_pt0_g$aic
+)
+
+g_aic <- base::rbind(
+  fs1_mf2_pt0_p_aic, 
+  fs1_mf2_pt0_nb_aic, 
+  fs1_mf2_pt0_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+```{r}
+#| label: fs1-mf2-pt1
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 1, membership function = 2, plant type  = 1
+df_dist_fs1_mf2 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1 & lag_annual_sum == 492.7
+)
+
+fs1_mf2_pt1_p <- fitdistrplus::fitdist(
+  df_dist_fs1_mf2$flowers[df_dist_fs1_mf2$q75_class_cones == 1],
+  "pois"
+)
+
+fs1_mf2_pt1_nb <- fitdistrplus::fitdist(
+  df_dist_fs1_mf2$flowers[df_dist_fs1_mf2$q75_class_cones == 1],
+  "nbinom"
+)
+
+fs1_mf2_pt1_g <- fitdistrplus::fitdist(
+  df_dist_fs1_mf2$flowers[df_dist_fs1_mf2$q75_class_cones == 1],
+  "geom"
+)
+
+plot(fs1_mf2_pt1_p)
+plot(fs1_mf2_pt1_nb)
+plot(fs1_mf2_pt1_g)
+
+summary(fs1_mf2_pt1_p)
+summary(fs1_mf2_pt1_nb)
+summary(fs1_mf2_pt1_g)
+
+# get aic values for each distribution
+fs1_mf2_pt1_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs1_mf2_pt1_p$aic
+)
+fs1_mf2_pt1_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs1_mf2_pt1_nb$aic
+)
+fs1_mf2_pt1_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs1_mf2_pt1_g$aic
+)
+
+g_aic <- base::rbind(
+  fs1_mf2_pt1_p_aic, 
+  fs1_mf2_pt1_nb_aic, 
+  fs1_mf2_pt1_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+### 5.1.7 fs 1, mf 3
+
+```{r}
+#| label: fs1-mf3-pt0
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 1, membership function = 3, plant type  = 0
+df_dist_fs1_mf3 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1 & lag_annual_sum >= 518.3
+)
+
+fs1_mf3_pt0_p <- fitdistrplus::fitdist(
+  df_dist_fs1_mf3$flowers[df_dist_fs1_mf3$q75_class_cones == 0],
+  "pois"
+)
+
+fs1_mf3_pt0_nb <- fitdistrplus::fitdist(
+  df_dist_fs1_mf3$flowers[df_dist_fs1_mf3$q75_class_cones == 0],
+  "nbinom"
+)
+
+fs1_mf3_pt0_g <- fitdistrplus::fitdist(
+  df_dist_fs1_mf3$flowers[df_dist_fs1_mf3$q75_class_cones == 0],
+  "geom"
+)
+
+plot(fs1_mf3_pt0_p)
+plot(fs1_mf3_pt0_nb)
+plot(fs1_mf3_pt0_g)
+
+summary(fs1_mf3_pt0_p)
+summary(fs1_mf3_pt0_nb)
+summary(fs1_mf3_pt0_g)
+
+# get aic values for each distribution
+fs1_mf3_pt0_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs1_mf3_pt0_p$aic
+)
+fs1_mf3_pt0_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs1_mf3_pt0_nb$aic
+)
+fs1_mf3_pt0_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs1_mf3_pt0_g$aic
+)
+
+g_aic <- base::rbind(
+  fs1_mf3_pt0_p_aic, 
+  fs1_mf3_pt0_nb_aic, 
+  fs1_mf3_pt0_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+```{r}
+#| label: fs1-mf3-pt1
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+# load libraries
+library(dplyr)
+
+# fuzzy set = 1, membership function = 3, plant type  = 1
+df_dist_fs1_mf3 <- flower_current_q_all_2017 %>% 
+  dplyr::filter(
+    fuzzy == 1 & lag_annual_sum >= 518.3
+)
+
+fs1_mf3_pt1_p <- fitdistrplus::fitdist(
+  df_dist_fs1_mf3$flowers[df_dist_fs1_mf3$q75_class_cones == 1],
+  "pois"
+)
+
+fs1_mf3_pt1_nb <- fitdistrplus::fitdist(
+  df_dist_fs1_mf3$flowers[df_dist_fs1_mf3$q75_class_cones == 1],
+  "nbinom"
+)
+
+fs1_mf3_pt1_g <- fitdistrplus::fitdist(
+  df_dist_fs1_mf3$flowers[df_dist_fs1_mf3$q75_class_cones == 1],
+  "geom"
+)
+
+plot(fs1_mf3_pt1_p)
+plot(fs1_mf3_pt1_nb)
+plot(fs1_mf3_pt1_g)
+
+summary(fs1_mf3_pt1_p)
+summary(fs1_mf3_pt1_nb)
+summary(fs1_mf3_pt1_g)
+
+# get aic values for each distribution
+fs1_mf3_pt1_p_aic <- base::data.frame(
+  distribution = "poisson", 
+  AIC = fs1_mf3_pt1_p$aic
+)
+fs1_mf3_pt1_nb_aic <- base::data.frame(
+  distribution = "negative binomial", 
+  AIC = fs1_mf3_pt1_nb$aic
+)
+fs1_mf3_pt1_g_aic <- base::data.frame(
+  distribution = "geometric",
+  AIC = fs1_mf3_pt1_g$aic
+)
+
+g_aic <- base::rbind(
+  fs1_mf3_pt1_p_aic, 
+  fs1_mf3_pt1_nb_aic, 
+  fs1_mf3_pt1_g_aic
+)
+
+knitr::kable(
+  g_aic, 
+  caption = "AIC values of the three distribution tested"
+)
+
+```
+
+## 5.2 Plot all flower count distributions
+
+```{r}
+# load libraries
+library(ggplot2)
+library(ggpubr)
+library(tidyr)
+
+
+# fs0_mf1
+g_n = 0:30
+
+g_df_fs0_mf1 <- data.frame(
+  events = g_n, 
+  pt0 = stats::dpois(x = g_n, lambda = 0.071),
+  pt1 = stats::dpois(x = g_n, lambda = 0.111)
+)
+
+g_df_fs0_mf1 <- g_df_fs0_mf1 %>% 
+  tidyr::pivot_longer(
+    -c(events),
+    names_to = "plant_type",
+    values_to = "density"
+  )
+
+p_fs0_mf1 <- ggplot(
+  data = g_df_fs0_mf1, 
+  mapping = aes(
+    x = factor(events),
+    y = density,
+    fill = plant_type)) +
+  geom_col(position = "dodge") +
+  labs(x = "Flowers (#)", y = "Density") +
+  theme_classic() +
+  scale_fill_manual(
+    name = "Flower producer type:",
+    # values = c("#56B4E9", "#E69F00"),
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  ) +
+  scale_x_discrete(breaks = seq(0, 30, 5)) +
+  ggtitle("(a)") +
+  theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  )
+
+
+# fs0_mf2
+g_df_fs0_mf2 <- data.frame(
+  events = g_n, 
+  pt0 = stats::dgeom(x = g_n, prob = 0.673),
+  pt1 = stats::dgeom(x = g_n, prob = 0.288)
+)
+
+g_df_fs0_mf2 <- g_df_fs0_mf2 %>% 
+  tidyr::pivot_longer(
+    -c(events),
+    names_to = "plant_type",
+    values_to = "density"
+  )
+
+p_fs0_mf2 <- ggplot(
+  data = g_df_fs0_mf2, 
+  mapping = aes(
+    x = factor(events),
+    y = density,
+    fill = plant_type)) +
+  geom_col(position = "dodge") +
+  labs(x = "Flowers (#)", y = "Density") +
+  theme_classic() +
+  scale_fill_manual(
+    name = "Flower producer type:",
+    # values = c("#56B4E9", "#E69F00"),
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  ) +
+  scale_x_discrete(breaks = seq(0, 30, 5)) +
+  ggtitle("(b)") +
+  theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  )
+
+# fs1_mf0
+g_df_fs1_mf0 <- data.frame(
+  events = g_n, 
+  pt0 = stats::dgeom(x = g_n, prob = 0.618),
+  pt1 = stats::dgeom(x = g_n, prob = 0.415)
+)
+
+g_df_fs1_mf0 <- g_df_fs1_mf0 %>% 
+  tidyr::pivot_longer(
+    -c(events),
+    names_to = "plant_type",
+    values_to = "density"
+  )
+
+p_fs1_mf0 <- ggplot(
+  data = g_df_fs1_mf0, 
+  mapping = aes(
+    x = factor(events),
+    y = density,
+    fill = plant_type)) +
+  geom_col(position = "dodge") +
+  labs(x = "Flowers (#)", y = "Density") +
+  theme_classic() +
+  scale_fill_manual(
+    name = "Flower producer:",
+    # values = c("#56B4E9", "#E69F00"),
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  ) +
+  scale_x_discrete(breaks = seq(0, 30, 5)) +
+  ggtitle("(c)") + 
+    theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  )
+
+
+# fs1_mf1
+g_df_fs1_mf1 <- data.frame(
+  events = g_n, 
+  pt0 = stats::dpois(x = g_n, lambda = 1.214),
+  pt1 = stats::dgeom(x = g_n, prob = 0.25)
+)
+
+g_df_fs1_mf1 <- g_df_fs1_mf1 %>% 
+  tidyr::pivot_longer(
+    -c(events),
+    names_to = "plant_type",
+    values_to = "density"
+  )
+
+p_fs1_mf1 <- ggplot(
+  data = g_df_fs1_mf1, 
+  mapping = aes(
+    x = factor(events),
+    y = density,
+    fill = plant_type)) +
+  geom_col(position = "dodge") +
+  labs(x = "Flowers (#)", y = "Density") +
+  theme_classic() +
+  scale_fill_manual(
+    name = "Flower producer:",
+    # values = c("#56B4E9", "#E69F00"),
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  ) +
+  scale_x_discrete(breaks = seq(0, 30, 5)) +
+  ggtitle("(d)") +
+    theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  )
+
+# fs1_mf2
+g_df_fs1_mf2 <- data.frame(
+  events = g_n, 
+  pt0 = stats::dgeom(x = g_n, prob = 0.203),
+  pt1 = stats::dnbinom(x = g_n, size = 3.254, mu = 8.443)
+)
+
+g_df_fs1_mf2 <- g_df_fs1_mf2 %>% 
+  tidyr::pivot_longer(
+    -c(events),
+    names_to = "plant_type",
+    values_to = "density"
+  )
+
+p_fs1_mf2 <- ggplot(
+  data = g_df_fs1_mf2, 
+  mapping = aes(
+    x = factor(events),
+    y = density,
+    fill = plant_type)) +
+  geom_col(position = "dodge") +
+  labs(x = "Flowers (#)", y = "Density") +
+  theme_classic() +
+  scale_fill_manual(
+    name = "Flower producer:",
+    # values = c("#56B4E9", "#E69F00"),
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  ) +
+  scale_x_discrete(breaks = seq(0, 30, 5)) +
+  ggtitle("(e)") +
+    theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  )
+
+
+# fs1_mf3
+g_df_fs1_mf3 <- data.frame(
+  events = g_n, 
+  pt0 = stats::dgeom(x = g_n, prob = 0.205),
+  pt1 = stats::dnbinom(x = g_n, size = 6.274, mu = 10.100)
+)
+
+g_df_fs1_mf3 <- g_df_fs1_mf3 %>% 
+  tidyr::pivot_longer(
+    -c(events),
+    names_to = "plant_type",
+    values_to = "density"
+  )
+
+p_fs1_mf3 <- ggplot(
+  data = g_df_fs1_mf3, 
+  mapping = aes(
+    x = factor(events),
+    y = density,
+    fill = plant_type)) +
+  geom_col(position = "dodge") +
+  labs(x = "Flowers (#)", y = "Density") +
+  theme_classic() +
+  scale_fill_manual(
+    name = "Flower producer:",
+    # values = c("#56B4E9", "#E69F00"),
+    values = c("#0073C2FF", "#EFC000FF"),
+    labels = c("low", "high")
+  ) +
+  scale_x_discrete(breaks = seq(0, 30, 5)) +
+  ggtitle("(f)") +
+    theme(
+    text = element_text(size = 12, face = "bold"),
+    axis.text    = element_text(size = 12),
+    axis.title   = element_text(size = 12, face = "bold"),
+    legend.text  = element_text(size = 12, face = "plain"),
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.position = "none"
+  )
+
+
+# legend
+# p_legend <- ggplot() +
+#   geom_col(
+#     data = g_df_fs1_mf3, 
+#     mapping = aes(
+#       x = as.numeric(events),
+#       y = as.numeric(density),
+#       fill = plant_type),
+#     position = "dodge") +
+#   # labs(x = "# of flowers", y = "density") +
+#   # theme_classic() +
+#   scale_fill_manual(
+#     name = "Flower producer class",
+#     # values = c("#56B4E9", "#E69F00"),
+#     values = c("#0073C2FF", "#EFC000FF"),
+#     labels = c("poor", "good")
+#   ) +
+#   # scale_x_discrete(breaks = seq(0, 30, 5)) +
+#   ggplot2::xlim(0, 0) +
+#   ggplot2::ylim(0, 0) +
+#   ggtitle(" ") +
+#   # theme(
+#   #   text = element_text(size = 12, face = "bold"),
+#   #   axis.text    = element_text(size = 12),
+#   #   axis.title   = element_text(size = 12, face = "bold"),
+#   #   legend.text  = element_text(size = 12, face = "plain"),
+#   #   legend.title = element_text(size = 12, face = "bold")
+#   #   # legend.position = "none"
+#   # ) +
+#   # ggplot2::lims(x = c(0, 0), y = c(0, 0)) +
+#   # ggplot2::coord_cartesian(xlim = c(-1, -1), ylim = c(-1, -1)) +
+#   theme_void() +
+#   theme(
+#     legend.position = c(0.5, 0.5),
+#     # legend.key.size = unit(1, "cm"),
+#     legend.text  = element_text(size = 12, face = "plain"),
+#     legend.title = element_text(size = 12, face = "bold")
+#   ) +
+#   guides(colour = guide_legend(override.aes = list(size = 8)))
+
+# combine all subplots
+g_parr <- ggpubr::ggarrange(
+  p_fs0_mf1,
+  p_fs0_mf2,
+  p_fs1_mf0,
+  p_fs1_mf1,
+  p_fs1_mf2,
+  p_fs1_mf3,
+  ncol = 3,
+  nrow = 2,
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+g_parr
+
+# save plot
+ggplot2::ggsave(
+  plot = g_parr,
+  filename = base::paste0("flower_distr_dpi300_6plots.tiff"),
+  path = "./data/plots",
+  width = 3.31 * 2,
+  height = 3.31 * 1.5,
+  bg = "white",
+  dpi = 300
+)
+
+
+```
+
+```{r}
+#| label: fuzzy-paper-plot
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false
+
+
+# load libraries
+# library(ggplot2)
+# library(ggpubr)
+# 
+# p3f_copy <- p3f + ggtitle("(a)")
+# p_fs1_mf0_copy <- p_fs1_mf0 + 
+#   ggtitle("(b)") + 
+#   ggplot2::theme(
+#     text         = element_text(size = 14, face = "bold"),
+#     axis.text    = element_text(size = 14),
+#     axis.title   = element_text(size = 14, face = "bold"),
+#     legend.text  = element_text(size = 14),
+#     legend.title = element_text(size = 14, face = "bold"),
+#   )
+# 
+# p_fs1_mf3_copy <- p_fs1_mf3 + 
+#   ggtitle("(c)") +
+#   ggplot2::theme(
+#     text         = element_text(size = 14, face = "bold"),
+#     axis.text    = element_text(size = 14),
+#     axis.title   = element_text(size = 14, face = "bold"),
+#     legend.text  = element_text(size = 14),
+#     legend.title = element_text(size = 14, face = "bold"),
+#   ) 
+# 
+# g_parr1 <- ggpubr::ggarrange(
+#   p3f_copy,
+#   ncol = 1,
+#   common.legend = TRUE, 
+#   legend = "bottom"
+# )
+# 
+# g_parr2 <- ggpubr::ggarrange(
+#   p_fs1_mf0_copy,
+#   p_fs1_mf3_copy,
+#   ncol = 2,
+#   common.legend = TRUE, 
+#   legend = "bottom"
+# )
+# 
+# g_parr3 <- ggpubr::ggarrange(
+#   g_parr1,
+#   g_parr2,
+#   ncol = 1,
+#   nrow = 2
+# )
+# 
+# 
+# ggplot2::ggsave(
+#   plot = g_parr3,
+#   filename = base::paste0("fuzzy_paper_plot.tiff"),
+#   path = "./data/plots",
+#   width = 3.31 * 2,
+#   height = 3.31 * 2,
+#   bg = "white",
+#   dpi = 1200
+# )
+
+```
+
+# 6. Sensitivity analysis
+
+```{r}
+#| label: sensitivity-calc
+#| include: true
+#| echo: true
+#| collapse: false
+#| warning: false
+
+# load utils
+source("utils/pooled_sd.R")
+source("utils/read_multiple_files.R")
+
+library(signs)
+library(tibble)
+
+# input files
+g_path <- "data/sim_outputs/sensitivity/"
+g_path_ref <- "data/sim_outputs/sensitivity/sens_current_ref"
+g_path_sens <- "data/sim_outputs/sensitivity/sens_current"
+
+# simulation output type
+g_sim_type <- "*_metapop.csv"
+
+# name output figure
+g_figure_name <- "sensitivity"
+
+# read simulation experiment output files and create df
+g_df_ref <- fun_read_files(base::paste0(g_path_ref, "/raw"), g_sim_type)
+g_df_sens <- fun_read_files(base::paste0(g_path_sens, "/raw"), g_sim_type)
+
+# read simulation parameters
+g_params_ref <- base::list.files(
+  path = base::paste0(g_path),
+  pattern = "sens_current_ref_values.csv",
+  full.names = TRUE
+)
+
+g_params_ref <- plyr::ldply(
+  g_params_ref,
+  utils::read.table,
+  sep = " ",
+  fill = TRUE,
+  header = TRUE
+)
+
+
+# take the parameter values for plotting
+g_params_ref <- g_params_ref[, c("sim_id", "param1", "val1")]
+
+
+g_params_ref_unique <- g_params_ref[!base::duplicated(g_params_ref[ , base::c("param1")]), ]
+
+g_params_ref_unique <- tibble::rowid_to_column(g_params_ref_unique, "id")
+
+# g_params_ref_unique <- g_params_ref_unique[, base::c(1, 3)]
+
+# read simulation parameters
+g_params <- base::list.files(
+  path = base::paste0(g_path_sens, "/in/sim"),
+  pattern = "*_simfile.csv",
+  full.names = TRUE
+)
+
+g_params <- plyr::ldply(
+  g_params,
+  utils::read.table,
+  sep = " ",
+  fill = TRUE,
+  header = TRUE
+)
+
+# take the parameter values for plotting
+g_params <- g_params[, c("sim_id", "param1", "val1")]
+
+
+g_params_unique <- g_params[!base::duplicated(g_params[ , base::c("param1")]), ]
+
+# g_params$sim_id <- base::seq.int(base::nrow(g_params))
+g_params_unique <- tibble::rowid_to_column(g_params_unique, "id")
+
+g_params_unique <- g_params_unique[, base::c(1, 3)]
+
+# calculate metapopulation persistence
+g_df_ref_summ <- g_df_ref %>%
+  dplyr::group_by(sim_id) %>%
+  dplyr::summarise(
+    grand_mean_year_max = base::mean(year_max, na.rm = TRUE),
+    grand_mean_occu_mean = base::mean(occu_mean, na.rm = TRUE)
+  )
+
+g_df_sens_summ <- g_df_sens %>%
+  dplyr::group_by(sim_id) %>%
+  dplyr::summarise(
+    grand_mean_year_max = base::mean(year_max, na.rm = TRUE),
+    grand_mean_occu_mean = base::mean(occu_mean, na.rm = TRUE)
+  )
+
+g_df_summ <- dplyr::mutate(
+  g_df_sens_summ,
+  dev_persistence = (grand_mean_year_max - g_df_ref_summ$grand_mean_year_max[1]) / 
+      g_df_ref_summ$grand_mean_year_max[1] * 100,
+  dev_occur = (grand_mean_occu_mean - g_df_ref_summ$grand_mean_occu_mean[1]) / 
+      g_df_ref_summ$grand_mean_occu_mean[1] * 100
+)
+
+df <- base::as.data.frame(
+  base::matrix(
+    base::round(g_df_summ$dev_persistence, 2),
+    ncol = 4,
+    byrow = TRUE
+  )
+)
+
+# change column names
+base::names(df) <- base::c("\u201310", "\u20135", "+5", "+10")
+
+# change row names
+base::row.names(df) <- base::paste(g_params_unique$param1)
+```
+
+```{r}
+#| label: sensitivity-table-values
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false 
+
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(signs)
+
+g_df_params_with_ref <- base::as.data.frame(
+  base::matrix(
+    signs::signs(g_params_ref_unique$val1, accuracy = 0.001),
+    ncol = 1, 
+    byrow = TRUE
+  )
+)
+
+g_df_params <- base::as.data.frame(
+  base::matrix(
+    signs::signs(g_params$val1, accuracy = 0.001),
+    ncol = 4, 
+    byrow = TRUE
+  )
+)
+
+g_df_params_with_ref <- cbind(g_df_params_with_ref, g_df_params) 
+
+
+# change column names
+base::names(g_df_params_with_ref) <- base::c(" ", "\u201310", "\u20135", "+5", "+10")
+
+# change row names
+base::row.names(g_df_params_with_ref) <- base::paste(g_params_unique$param1)
+
+
+g_tb_params <- g_df_params_with_ref %>%  
+  kableExtra::kbl(caption = "Table xx Parameter variation values" , booktabs = TRUE, align = "r") %>% 
+  kableExtra::add_header_above(base:::c("Parameter code", "Reference", "Variation (%)" = 4), align = "c", line = F) %>%
+  kable_styling(full_width = TRUE, latex_options = c("striped", "hold_position")) %>% 
+  kableExtra::row_spec(7, color = c(rep("red", 4))) %>%
+  kableExtra::row_spec(8, color = c(rep("red", 4))) %>%
+  kableExtra::row_spec(9, color = c(rep("red", 4))) %>%
+  kableExtra::row_spec(18, color = c(rep("red", 4))) %>%
+  kableExtra::row_spec(19, color = c(rep("red", 4))) %>%
+  kableExtra::row_spec(20, color = c("red")) %>%
+  kableExtra::row_spec(21, color = c("red")) %>%
+  kableExtra::row_spec(22, color = c("red")) %>%
+  kableExtra::row_spec(24, color = c(rep("red", 4))) %>%
+  kableExtra::row_spec(33, color = c(rep("red", 4))) %>%
+  kableExtra::row_spec(34, color = c(rep("red", 4))) %>%
+  kableExtra::column_spec(2, color = "black") %>% 
+  kableExtra::column_spec(3, color = c(rep("black", 6), rep("red", 3), rep("black", 8), rep("red", 2), "black", "red", "black", "black", "red", rep("black", 8), rep("red", 2), rep("black", 20))) %>% 
+  kableExtra::column_spec(4, color = c(rep("black", 6), rep("red", 3), rep("black", 8), rep("red", 2), rep("black", 4), "red", rep("black", 8), rep("red", 2), rep("black", 20))) %>% 
+    kableExtra::column_spec(5, color = c(rep("black", 6), rep("red", 3), rep("black", 8), rep("red", 2), "black", "red", "black", "black", "red", rep("black", 8), rep("red", 2), rep("black", 20))) %>%  
+  kableExtra::column_spec(6, color = c(rep("black", 6), rep("red", 3), rep("black", 8), rep("red", 2), "red", "red", "red", "black", "red", rep("black", 8), rep("red", 2), rep("black", 20)))
+
+g_tb_params
+
+# write csv file
+# utils::write.csv(x = g_df_params_with_ref, file = "sensitivity_values.csv")
+```
+
+```{r}
+#| label: sensitivity-table-results
+#| include: true
+#| echo: false
+#| collapse: false
+#| warning: false 
+
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(webshot2)
+
+g_tb <- df %>%  
+  kableExtra::kbl(
+    caption = "Table xx Local sensitivity analysis" , 
+    booktabs = TRUE, 
+    align = "r"
+  ) %>% 
+  kableExtra::add_header_above(
+    base:::c("Parameter code", "Variation (%)" = 4),
+    align = "c",
+    line = FALSE
+  ) %>% 
+  kableExtra::column_spec(
+    column = 2, 
+    background = base::ifelse(
+      df$`–10` < -20,
+      "#EFC000FF",
+      base::ifelse(
+        df$`–10` > 20,
+        "#0073C2FF",
+        "white")
+    )
+  ) %>% 
+  kableExtra::column_spec(
+    column = 3, 
+    background = base::ifelse(
+      df$`–5` < -10,
+      "#EFC000FF", 
+      base::ifelse(
+        df$`–5` > 10, 
+        "#0073C2FF", 
+        "white")
+    )
+  ) %>%
+  kableExtra::column_spec(
+    column = 4, 
+    background = base::ifelse(
+      df$`+5` < -10,
+      "#EFC000FF", 
+      base::ifelse(
+        df$`+5` > 10,
+        "#0073C2FF",
+        "white")
+    )
+  ) %>% 
+  kableExtra::column_spec(
+    column = 5,
+    background = base::ifelse(
+      df$`+10` < -20,
+      "#EFC000FF", 
+      base::ifelse(
+        df$`+10` > 20, 
+        "#0073C2FF", 
+        "white")
+    )
+  ) %>% 
+  kable_styling(latex_options = c("striped", "hold_position"))
+
+g_tb
+
+# kableExtra::save_kable(g_tb, file = "./mtcars.html")
+# webshot2::webshot("./mtcars.html", "./mtcars.pdf")
+# 
+# # write csv file
+# utils::write.csv(x = df, file = "sensitivity_results.csv")
+
+# kableExtra::save_kable(
+#   x = g_tb,
+#   # file = "./data/sim_outputs/sensitivity/tables/sensitivity_results.pdf"
+#     file = "./test.pdf"
+# )
+
+```
+
+```{r}
+
+## exort table as latex code. There are two different packages that do this work
+# 
+# library(Hmisc)
+# 
+# Hmisc::latex(df, file="")            # If you want all the data
+# latex(describe(d), file="")  # If you just want a summary
+
+# library(xtable)
+# 
+# xtable::xtable(df)
+
+```

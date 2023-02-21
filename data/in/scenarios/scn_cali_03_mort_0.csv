@@ -1,0 +1,2 @@
+model_type study_size metapop_file carrying_capacity init_cones init_seeds is_climate long_term_rain weather_scn climate_file is_fire fire_file dispersal_file species_file habitat_file plant_type_file fuzzy_set_file flower_dist_file
+0 He2010_study_size.csv metapop_cali_03_mort_scn_0.csv 2500 85.868 623.141 1 453.848 1 baseline_cali_1998_2006.csv 0 fire.csv dispersal_baseline.csv banksia_base_90_mort_0.csv habitat.csv plant_types.csv fuzzy_set_list.csv flower_distributions_current.csv

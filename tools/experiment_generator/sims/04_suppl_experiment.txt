@@ -1,0 +1,20 @@
+#04_suppl_experiment#
+@"is_study_rep", (1)@
+@"study_rep", (study_rep_30.csv)@
+@"sim_rep", (30)@
+@"run_time", (500)@
+@"is_study", (0)@
+@"is_fire_output", (0)@
+@"is_dynamics", (0)@
+@"is_metapop", (1)@
+@"is_metapop_full", (0)@
+@"is_metapop_dynamics", (0)@
+@"is_metapop_pops", (0)@
+@"is_recol_rescue", (0)@
+@"is_plants_pop", (0)@
+@"is_plants_pop", (0)@
+@"scenario_file", (scn_current.csv)@
+{"mort_scn", (5)}
+{"model_type", (1)}
+{"plant_type_file", (plant_types_6.csv)}
+<"fire_interval_mean", "metapop_file", [5 30 1], (big_to_small/metapop_big_to_small_0.csv big_to_small/metapop_big_to_small_1.csv big_to_small/metapop_big_to_small_2.csv big_to_small/metapop_big_to_small_3.csv big_to_small/metapop_big_to_small_4.csv big_to_small/metapop_big_to_small_5.csv big_to_small/metapop_big_to_small_6.csv big_to_small/metapop_big_to_small_7.csv big_to_small/metapop_big_to_small_8.csv big_to_small/metapop_big_to_small_9.csv big_to_small/metapop_big_to_small_10.csv big_to_small/metapop_big_to_small_11.csv big_to_small/metapop_big_to_small_12.csv big_to_small/metapop_big_to_small_13.csv big_to_small/metapop_big_to_small_14.csv big_to_small/metapop_big_to_small_15.csv big_to_small/metapop_big_to_small_16.csv big_to_small/metapop_big_to_small_17.csv big_to_small/metapop_big_to_small_18.csv big_to_small/metapop_big_to_small_19.csv big_to_small/metapop_big_to_small_20.csv big_to_small/metapop_big_to_small_21.csv big_to_small/metapop_big_to_small_22.csv big_to_small/metapop_big_to_small_23.csv big_to_small/metapop_big_to_small_24.csv big_to_small/metapop_big_to_small_25.csv big_to_small/metapop_big_to_small_26.csv big_to_small/metapop_big_to_small_27.csv big_to_small/metapop_big_to_small_28.csv big_to_small/metapop_big_to_small_29.csv big_to_small/metapop_big_to_small_30.csv big_to_small/metapop_big_to_small_31.csv big_to_small/metapop_big_to_small_32.csv big_to_small/metapop_big_to_small_33.csv big_to_small/metapop_big_to_small_34.csv big_to_small/metapop_big_to_small_35.csv big_to_small/metapop_big_to_small_36.csv big_to_small/metapop_big_to_small_37.csv)>
